@@ -16,6 +16,7 @@ import { COLORS } from '../constants/theme';
 import { Avatar } from '../components/Avatar';
 import { useZovio } from '../store/ZovioContext';
 import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native';
 
 export const ProfileScreen = () => {
   const {
@@ -30,6 +31,14 @@ export const ProfileScreen = () => {
     restoreSecureBackup,
     triggerTestPushNotification,
   } = useZovio();
+
+  const navigation = useNavigation<any>();
+
+  const handleResetOnboarding = async () => {
+    const { storage } = require('../store/storage');
+    await storage.setHasCompletedOnboarding(false);
+    navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+  };
 
   // Modal States
   const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -191,6 +200,14 @@ export const ProfileScreen = () => {
           <View style={s.ofl}>
             <Icon name="help-circle-outline" size={20} color={COLORS.gray} />
             <Text style={s.ot}>How ZOVIO Works</Text>
+          </View>
+          <Icon name="chevron-forward" size={20} color={COLORS.gray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.or} onPress={handleResetOnboarding}>
+          <View style={s.ofl}>
+            <Icon name="refresh-circle-outline" size={20} color={COLORS.gray} />
+            <Text style={s.ot}>Restart Onboarding Tour</Text>
           </View>
           <Icon name="chevron-forward" size={20} color={COLORS.gray} />
         </TouchableOpacity>
