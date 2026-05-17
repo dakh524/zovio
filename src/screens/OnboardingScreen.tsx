@@ -176,6 +176,8 @@ export const OnboardingScreen = () => {
                 onPress={async () => {
                   const restored = await restoreSecureBackup();
                   if (restored) {
+                    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                    await AsyncStorage.setItem('zovio_backup_restored_onboarding', 'true');
                     await finishOnboarding();
                   }
                 }}

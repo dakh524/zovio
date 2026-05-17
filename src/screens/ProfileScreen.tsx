@@ -34,9 +34,25 @@ export const ProfileScreen = () => {
 
   const navigation = useNavigation<any>();
 
+  const [backupRestoredOnboarding, setBackupRestoredOnboarding] = useState(false);
+
+  React.useEffect(() => {
+    const checkBackupState = async () => {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const val = await AsyncStorage.getItem('zovio_backup_restored_onboarding');
+      setBackupRestoredOnboarding(val === 'true');
+    };
+    checkBackupState();
+
+    const unsubscribe = navigation.addListener('focus', checkBackupState);
+    return unsubscribe;
+  }, [navigation]);
+
   const handleResetOnboarding = async () => {
     const { storage } = require('../store/storage');
     await storage.setHasCompletedOnboarding(false);
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.removeItem('zovio_backup_restored_onboarding');
     navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
   };
 
@@ -218,15 +234,20 @@ export const ProfileScreen = () => {
       {/* Secure Cryptographic Backup Section */}
       <Text style={s.sectionHeader}>🔒 Secure Cryptographic Backup</Text>
       <View style={s.exportRow}>
-        <TouchableOpacity style={[s.exportBtn, { backgroundColor: '#1A1A2E' }]} onPress={exportSecureBackup}>
+        <TouchableOpacity 
+          style={[s.exportBtn, { backgroundColor: '#1A1A2E' }, backupRestoredOnboarding && { flex: 1 }]} 
+          onPress={exportSecureBackup}
+        >
           <Icon name="shield-checkmark" size={22} color={COLORS.primary} />
           <Text style={[s.exportBtnText, { color: COLORS.primary }]}>Create Backup</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[s.exportBtn, { backgroundColor: '#FFFDF4', borderWidth: 1.5, borderColor: '#1A1A2E' }]} onPress={restoreSecureBackup}>
-          <Icon name="cloud-upload" size={22} color="#1A1A2E" />
-          <Text style={[s.exportBtnText, { color: '#1A1A2E' }]}>Restore Backup</Text>
-        </TouchableOpacity>
+        {!backupRestoredOnboarding && (
+          <TouchableOpacity style={[s.exportBtn, { backgroundColor: '#FFFDF4', borderWidth: 1.5, borderColor: '#1A1A2E' }]} onPress={restoreSecureBackup}>
+            <Icon name="cloud-upload" size={22} color="#1A1A2E" />
+            <Text style={[s.exportBtnText, { color: '#1A1A2E' }]}>Restore Backup</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* MODAL 1: Edit Profile Name */}

@@ -278,7 +278,7 @@ export const AnalyticsScreen = () => {
 
   const totalSpent = Object.values(categoryTotals).reduce((sum, val) => sum + val, 0);
 
-  const circumference = 282.7;
+  const circumference = 188.5;
   let currentOffset = 0;
   const donutSlices = categories.map((cat, i) => {
     const amt = categoryTotals[cat];
@@ -769,21 +769,21 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* Donut Card Distribution */}
-          <CyberPanel title="Lending Distribution">
+          <CyberPanel title="Lending Distribution Pie Chart">
             <View style={styles.donutOverview}>
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
                   {totalSpent === 0 ? (
-                    <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="14" fill="transparent" />
+                    <Circle cx="60" cy="60" r="30" stroke="#E5E7EB" strokeWidth="30" fill="transparent" />
                   ) : (
                     donutSlices.map((slice, i) => (
                       <Circle
                         key={i}
                         cx="60"
                         cy="60"
-                        r="45"
+                        r="30"
                         stroke={slice.color}
-                        strokeWidth="14"
+                        strokeWidth="30"
                         strokeDasharray={slice.dasharray}
                         fill="transparent"
                         rotation={slice.rotation}
@@ -1107,21 +1107,21 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* Category Donut Distribution */}
-          <CyberPanel title="Outflow Category Breakdown">
+          <CyberPanel title="Outflow Category Pie Chart">
             <View style={styles.donutOverview}>
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
                   {totalPersonalSpent === 0 ? (
-                    <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="14" fill="transparent" />
+                    <Circle cx="60" cy="60" r="30" stroke="#E5E7EB" strokeWidth="30" fill="transparent" />
                   ) : (
                     personalDonutSlices.map((slice, i) => (
                       <Circle
                         key={i}
                         cx="60"
                         cy="60"
-                        r="45"
+                        r="30"
                         stroke={slice.color}
-                        strokeWidth="14"
+                        strokeWidth="30"
                         strokeDasharray={slice.dasharray}
                         fill="transparent"
                         rotation={slice.rotation}
