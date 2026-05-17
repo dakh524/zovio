@@ -7,6 +7,8 @@ import * as FileSystem from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
 import * as XLSX from 'xlsx';
+import * as DocumentPicker from 'expo-document-picker';
+import { encryptData, decryptData } from '../utils/crypto';
 
 // Types
 export interface Memory {
@@ -63,6 +65,8 @@ interface ZovioContextType {
   addFinance: (entry: Omit<FinanceEntry, 'id'>) => Promise<void>;
   deleteFinance: (id: string) => Promise<void>;
   updateFinance: (id: string, entry: Partial<FinanceEntry>) => Promise<void>;
+  exportSecureBackup: () => Promise<void>;
+  restoreSecureBackup: () => Promise<boolean>;
 }
 
 const ZovioContext = createContext<ZovioContextType | undefined>(undefined);
@@ -133,11 +137,15 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await scheduleDailyReminder(data, preferences);
     // Silent background sync
     syncWithSupabase();
+    // Shadow Backup
+    triggerAutoBackup(data, notes, finances, user, preferences);
   };
 
   const saveNotesToStorage = async (data: Memory[]) => {
     await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(data));
     setNotes(data);
+    // Shadow Backup
+    triggerAutoBackup(memories, data, finances, user, preferences);
   };
 
   const saveFinancesToStorage = async (data: FinanceEntry[]) => {
@@ -145,6 +153,8 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setFinances(data);
     // Silent background sync
     syncWithSupabase();
+    // Shadow Backup
+    triggerAutoBackup(memories, notes, data, user, preferences);
   };
 
   // Supabase background sync (Silently fails/handles offline)
@@ -215,6 +225,8 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
     setUser(updatedUser);
+    // Shadow Backup
+    triggerAutoBackup(memories, notes, finances, updatedUser, preferences);
   };
 
   // Update Preferences & Notifications
@@ -223,6 +235,8 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(updatedPrefs));
     setPreferences(updatedPrefs);
     await scheduleDailyReminder(memories, updatedPrefs);
+    // Shadow Backup
+    triggerAutoBackup(memories, notes, finances, user, updatedPrefs);
   };
 
   // Personal Finance State Management (ADD 1)
@@ -553,6 +567,138 @@ Please settle when you get a chance 😊
     }
   };
 
+  // Compiled state helper
+  const compileBackupState = () => {
+    return JSON.stringify({
+      memories,
+      notes,
+      user,
+      preferences,
+      finances,
+    });
+  };
+
+  // Trigger Automatic Shadow Backups with folder cleanup ("remove unused files in this folder")
+  const triggerAutoBackup = async (
+    currentMemories = memories,
+    currentNotes = notes,
+    currentFinances = finances,
+    currentUser = user,
+    currentPrefs = preferences
+  ) => {
+    try {
+      const payload = JSON.stringify({
+        memories: currentMemories,
+        notes: currentNotes,
+        user: currentUser,
+        preferences: currentPrefs,
+        finances: currentFinances,
+      });
+      const encrypted = encryptData(payload);
+      const backupDir = `${(FileSystem as any).documentDirectory}ZOVIO_Backups/`;
+
+      const dirInfo = await FileSystem.getInfoAsync(backupDir);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(backupDir, { intermediates: true });
+      }
+
+      // 1. Save new auto backup
+      const timestamp = Date.now();
+      const filename = `zovio_auto_${timestamp}.enc`;
+      const targetUri = `${backupDir}${filename}`;
+      await FileSystem.writeAsStringAsync(targetUri, encrypted);
+
+      // 2. Clean unused / older backups: keep only the 2 latest
+      const files = await FileSystem.readDirectoryAsync(backupDir);
+      const autoBackups = files
+        .filter((f) => f.startsWith('zovio_auto_') && f.endsWith('.enc'))
+        .sort((a, b) => {
+          const tA = parseInt(a.replace('zovio_auto_', '').replace('.enc', ''), 10);
+          const tB = parseInt(b.replace('zovio_auto_', '').replace('.enc', ''), 10);
+          return tB - tA; // Newest first
+        });
+
+      if (autoBackups.length > 2) {
+        for (let i = 2; i < autoBackups.length; i++) {
+          await FileSystem.deleteAsync(`${backupDir}${autoBackups[i]}`, { idempotent: true });
+        }
+      }
+    } catch (e) {
+      console.log('Shadow backup failed silently: ', e);
+    }
+  };
+
+  // Export encrypted .zovio file to user selected external shared folders
+  const exportSecureBackup = async () => {
+    try {
+      const payload = compileBackupState();
+      const encrypted = encryptData(payload);
+      const filename = `ZOVIO_SecureBackup_${Date.now()}.zovio`;
+      const targetUri = `${(FileSystem as any).documentDirectory}${filename}`;
+
+      await FileSystem.writeAsStringAsync(targetUri, encrypted);
+
+      await Sharing.shareAsync(targetUri, {
+        dialogTitle: 'Export ZOVIO Hacker-Proof Backup File',
+        mimeType: 'application/octet-stream',
+        UTI: 'com.zovio.backup',
+      });
+
+      // Quick clean up of temporary sandbox files
+      setTimeout(() => {
+        FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
+      }, 5000);
+    } catch (e) {
+      Alert.alert('Backup Error', 'Failed to export secure backup.');
+    }
+  };
+
+  // Picker Restore encrypted backup and load database
+  const restoreSecureBackup = async (): Promise<boolean> => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (res.canceled || !res.assets || res.assets.length === 0) {
+        return false;
+      }
+
+      const fileUri = res.assets[0].uri;
+      const encryptedContent = await FileSystem.readAsStringAsync(fileUri);
+
+      // Decrypt and verify dynamic integrity checksum
+      const decrypted = decryptData(encryptedContent);
+      const restoredState = JSON.parse(decrypted);
+
+      // Structure verification
+      if (!restoredState.memories || !restoredState.user || !restoredState.preferences || !restoredState.finances) {
+        throw new Error('Invalid ZOVIO database schema.');
+      }
+
+      // Load into State
+      setMemories(restoredState.memories);
+      setNotes(restoredState.notes || restoredState.memories);
+      setUser(restoredState.user);
+      setPreferences(restoredState.preferences);
+      setFinances(restoredState.finances);
+
+      // Load into Storage
+      await AsyncStorage.setItem(MEMORIES_KEY, JSON.stringify(restoredState.memories));
+      await AsyncStorage.setItem(NOTES_KEY, JSON.stringify(restoredState.notes || restoredState.memories));
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(restoredState.user));
+      await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(restoredState.preferences));
+      await AsyncStorage.setItem(FINANCES_KEY, JSON.stringify(restoredState.finances));
+
+      Alert.alert('Restored Successfully', '✅ Your hacker-proof secure database has been successfully restored!');
+      return true;
+    } catch (e: any) {
+      Alert.alert('Restore Failed', `❌ Tampered or invalid ZOVIO backup file.\n\nDetails: ${e.message || e}`);
+      return false;
+    }
+  };
+
   return (
     <ZovioContext.Provider
       value={{
@@ -575,6 +721,8 @@ Please settle when you get a chance 😊
         addFinance,
         deleteFinance,
         updateFinance,
+        exportSecureBackup,
+        restoreSecureBackup,
       }}
     >
       {children}

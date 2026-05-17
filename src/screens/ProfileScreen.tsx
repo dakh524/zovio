@@ -26,6 +26,8 @@ export const ProfileScreen = () => {
     updatePreferences,
     exportToPDF,
     exportToExcel,
+    exportSecureBackup,
+    restoreSecureBackup,
   } = useZovio();
 
   // Modal States
@@ -199,6 +201,20 @@ export const ProfileScreen = () => {
         <TouchableOpacity style={[s.exportBtn, { backgroundColor: COLORS.success }]} onPress={exportToExcel}>
           <Icon name="grid" size={22} color={COLORS.white} />
           <Text style={s.exportBtnText}>Export Excel</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Secure Cryptographic Backup Section */}
+      <Text style={s.sectionHeader}>🔒 Secure Cryptographic Backup</Text>
+      <View style={s.exportRow}>
+        <TouchableOpacity style={[s.exportBtn, { backgroundColor: '#1A1A2E' }]} onPress={exportSecureBackup}>
+          <Icon name="shield-checkmark" size={22} color={COLORS.primary} />
+          <Text style={[s.exportBtnText, { color: COLORS.primary }]}>Create Backup</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[s.exportBtn, { backgroundColor: '#FFFDF4', borderWidth: 1.5, borderColor: '#1A1A2E' }]} onPress={restoreSecureBackup}>
+          <Icon name="cloud-upload" size={22} color="#1A1A2E" />
+          <Text style={[s.exportBtnText, { color: '#1A1A2E' }]}>Restore Backup</Text>
         </TouchableOpacity>
       </View>
 

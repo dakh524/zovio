@@ -5,6 +5,7 @@ import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { Avatar, getAvatarType } from '../components/Avatar';
 import Svg, { Path } from 'react-native-svg';
+import { useZovio } from '../store/ZovioContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,6 +57,7 @@ const ONBOARDING_DATA = [
 
 export const OnboardingScreen = () => {
   const navigation = useNavigation<any>();
+  const { restoreSecureBackup } = useZovio();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -156,6 +158,21 @@ export const OnboardingScreen = () => {
                 {item.isFirst ? 'Get Started' : item.isLast ? 'Enter Zovio' : 'Next'}
               </Text>
             </TouchableOpacity>
+
+            {item.isFirst && (
+              <TouchableOpacity
+                style={styles.restoreBtn}
+                onPress={async () => {
+                  const restored = await restoreSecureBackup();
+                  if (restored) {
+                    await finishOnboarding();
+                  }
+                }}
+              >
+                <Icon name="shield-checkmark-outline" size={16} color={COLORS.secondary} />
+                <Text style={styles.restoreBtnText}>Restore Secure Backup</Text>
+              </TouchableOpacity>
+            )}
 
             {(item.isFirst || item.isLast) && (
               <Text style={styles.footer}>Powered by Dakh Edu Solutions</Text>
@@ -298,6 +315,25 @@ const styles = StyleSheet.create({
   actionBtnText: {
     color: COLORS.secondary,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  restoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: COLORS.secondary,
+    backgroundColor: '#FFFDF4',
+    gap: 8,
+    marginTop: -8,
+    marginBottom: 20,
+  },
+  restoreBtnText: {
+    color: COLORS.secondary,
+    fontSize: 15,
     fontWeight: '700',
   },
   footer: {
