@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Line } from 'react-native-svg';
 import { useZovio } from '../store/ZovioContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
@@ -42,7 +42,6 @@ export const AnalyticsScreen = () => {
       if (isNaN(recordDate.getTime())) return true; // fallback
 
       if (isCustomRange) {
-        // Normalize date bounds
         const rDate = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate()).getTime();
         const sDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
         const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
@@ -91,7 +90,6 @@ export const AnalyticsScreen = () => {
   // ==========================================
   const handleExportCSV = async () => {
     try {
-      // Build Sheet 1: Friends & Family
       const friendsData = memories.map((m) => ({
         'Date': m.date,
         'Contact Name': m.contactName,
@@ -103,7 +101,6 @@ export const AnalyticsScreen = () => {
         'Notes': m.notes || '',
       }));
 
-      // Build Sheet 2: Personal Finances
       const personalData = finances.map((f) => ({
         'Date': f.date,
         'Title / Source': f.title,
@@ -113,7 +110,6 @@ export const AnalyticsScreen = () => {
         'Notes': f.notes || '',
       }));
 
-      // Build Multi-sheet workbook using XLSX
       const wb = XLSX.utils.book_new();
       const wsFriends = XLSX.utils.json_to_sheet(friendsData);
       const wsPersonal = XLSX.utils.json_to_sheet(personalData);
@@ -133,8 +129,6 @@ export const AnalyticsScreen = () => {
         dialogTitle: 'Export ZOVIO Excel Report',
         UTI: 'com.microsoft.excel.xlsx',
       });
-      
-      Alert.alert('Success', 'Excel spreadsheet generated and shared successfully! 📊');
     } catch (err) {
       Alert.alert('Export Failed', 'Could not compile XLSX spreadsheet report: ' + err);
     }
@@ -328,9 +322,8 @@ export const AnalyticsScreen = () => {
   const topSpendCategory = sortedSpent[0] || 'N/A';
   const pendingDuesCount = filtered.filter((m) => m.status === 'pending').length;
 
-  // EXTRA FRIENDS DEEP ANALYTICS
+  // Friends analytics
   const avgLendingSize = filtered.length > 0 ? Math.round(gaveSum / filtered.length) : 0;
-  const activeContacts = Array.from(new Set(filtered.map(m => m.contactName)));
   const outstandingBalMap = filtered.filter(m => m.status === 'pending').reduce((acc, m) => {
     const w = m.type === 'gave' ? m.amount : -m.amount;
     acc[m.contactName] = (acc[m.contactName] || 0) + w;
@@ -436,6 +429,34 @@ export const AnalyticsScreen = () => {
     ? `${savingsLinePath} L${savingsPoints[savingsPoints.length - 1].x},${svgHeight / 2} L${savingsPoints[0].x},${svgHeight / 2} Z`
     : '';
 
+  // ==========================================
+  // NEW INTERACTIVE JAPANESE CANDLESTICK BUILDER
+  // ==========================================
+  const candlestickData = last6Months.map((m) => {
+    const monthFinances = filteredFinances.filter((f) => f.date.startsWith(m.key));
+    
+    // Compute Open (cash balance at start of month - simulated by starting at ₹2000 base)
+    const open = 2000;
+    // Compute Close (Ending balance)
+    const income = monthFinances.filter((f) => f.type === 'income').reduce((sum, f) => sum + f.amount, 0);
+    const expense = monthFinances.filter((f) => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+    const close = open + (income - expense);
+
+    // Compute High / Low values during month
+    const high = Math.max(open, close, open + income);
+    const low = Math.min(open, close, Math.max(0, open - expense));
+
+    return { label: m.label, open, close, high, low };
+  });
+
+  const maxCandleVal = Math.max(...candlestickData.map(c => c.high), 5000);
+
+  // ==========================================
+  // SAVINGS GOAL RADAR MILESTONE
+  // ==========================================
+  const targetGoal = 25000;
+  const goalProgress = Math.min(100, Math.max(0, Math.round((totalPersonalSavings / targetGoal) * 100)));
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -488,13 +509,13 @@ export const AnalyticsScreen = () => {
           {!isCustomRange && (
             <View style={styles.segmentControl}>
               {(['Week', 'Month', 'Year'] as const).map((t) => (
-                <View
+                <TouchableOpacity
                   key={t}
-                  onTouchEnd={() => setTimeframe(t)}
+                  onPress={() => setTimeframe(t)}
                   style={timeframe === t ? styles.segmentActive : styles.segmentInactive}
                 >
                   <Text style={timeframe === t ? styles.segmentTextActive : styles.segmentText}>{t}</Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -635,47 +656,63 @@ export const AnalyticsScreen = () => {
       ) : (
         <>
           {/* PERSONAL FINANCE TRACK */}
-          <Text style={styles.sectionTitle}>Income vs Expense (Last 6 Months)</Text>
+          {/* 1. JAPANESE CANDLESTICK CHART */}
+          <Text style={styles.sectionTitle}>Japanese Candlestick Financial Trend (Open / High / Low / Close)</Text>
           <View style={styles.chartMock}>
             <View style={styles.chartWithYAxis}>
               <View style={styles.yAxisLabels}>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxBarVal)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxBarVal * 0.5)}</Text>
+                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal)}</Text>
+                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal * 0.5)}</Text>
                 <Text style={styles.yAxisText}>{preferences.currency}0</Text>
               </View>
 
-              {/* Side-by-Side SVG Bar Chart */}
               <View style={{ flex: 1 }}>
                 <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
                   <Path d={`M0,20 L${svgWidth},20`} stroke="#F3F4F6" strokeWidth="1" />
                   <Path d={`M0,75 L${svgWidth},75`} stroke="#F3F4F6" strokeWidth="1" />
                   <Path d={`M0,130 L${svgWidth},130`} stroke="#F3F4F6" strokeWidth="1" />
 
-                  {monthlyBarData.map((d, idx) => {
+                  {candlestickData.map((c, idx) => {
                     const stepX = (svgWidth - 20) / 6;
-                    const baseX = 10 + idx * stepX;
-                    const barW = 10;
-                    
-                    const incH = (d.income / maxBarVal) * 100;
-                    const expH = (d.expense / maxBarVal) * 100;
+                    const baseX = 20 + idx * stepX;
+                    const candleW = 14;
+
+                    const openY = 130 - (c.open / maxCandleVal) * 100;
+                    const closeY = 130 - (c.close / maxCandleVal) * 100;
+                    const highY = 130 - (c.high / maxCandleVal) * 100;
+                    const lowY = 130 - (c.low / maxCandleVal) * 100;
+
+                    const isBullish = c.close >= c.open;
+                    const candleColor = isBullish ? '#10B981' : '#EF4444';
 
                     return (
                       <React.Fragment key={idx}>
+                        {/* Upper Wick */}
+                        <Line
+                          x1={baseX + candleW / 2}
+                          y1={highY}
+                          x2={baseX + candleW / 2}
+                          y2={Math.min(openY, closeY)}
+                          stroke={candleColor}
+                          strokeWidth="2"
+                        />
+                        {/* Body */}
                         <Rect
                           x={baseX}
-                          y={130 - incH}
-                          width={barW}
-                          height={incH}
-                          fill="#10B981"
-                          rx="3"
+                          y={Math.min(openY, closeY)}
+                          width={candleW}
+                          height={Math.max(4, Math.abs(openY - closeY))}
+                          fill={candleColor}
+                          rx="2"
                         />
-                        <Rect
-                          x={baseX + barW + 2}
-                          y={130 - expH}
-                          width={barW}
-                          height={expH}
-                          fill="#EF4444"
-                          rx="3"
+                        {/* Lower Wick */}
+                        <Line
+                          x1={baseX + candleW / 2}
+                          y1={Math.max(openY, closeY)}
+                          x2={baseX + candleW / 2}
+                          y2={lowY}
+                          stroke={candleColor}
+                          strokeWidth="2"
                         />
                       </React.Fragment>
                     );
@@ -683,12 +720,79 @@ export const AnalyticsScreen = () => {
                 </Svg>
               </View>
             </View>
-            
+
             <View style={styles.chartXAxis}>
-              {monthlyBarData.map((d) => (
-                <Text key={d.label} style={styles.xAxisText}>
-                  {d.label}
+              {candlestickData.map((c) => (
+                <Text key={c.label} style={styles.xAxisText}>
+                  {c.label}
                 </Text>
+              ))}
+            </View>
+          </View>
+
+          {/* 2. SAVINGS GOAL RADAR PROGRESS GAUGE */}
+          <Text style={styles.sectionTitle}>Savings Goal Milestone (Target: {preferences.currency}25,000)</Text>
+          <View style={styles.savingsGoalCard}>
+            <View style={styles.progressRingContainer}>
+              <Svg width={90} height={90} viewBox="0 0 36 36">
+                <Circle cx="18" cy="18" r="15.91" fill="transparent" stroke="#F3F4F6" strokeWidth="4" />
+                <Circle
+                  cx="18"
+                  cy="18"
+                  r="15.91"
+                  fill="transparent"
+                  stroke={COLORS.primary}
+                  strokeWidth="4"
+                  strokeDasharray={`${goalProgress} 100`}
+                  rotation="-90"
+                  origin="18, 18"
+                />
+              </Svg>
+              <View style={styles.progressRingCenter}>
+                <Text style={styles.progressPercent}>{goalProgress}%</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, marginLeft: 20 }}>
+              <Text style={styles.goalText}>Target Progress</Text>
+              <Text style={styles.goalStatus}>
+                Saved: {preferences.currency}{totalPersonalSavings.toLocaleString()}
+              </Text>
+              <Text style={styles.goalDesc}>
+                {goalProgress >= 100 
+                  ? '🎉 Congratulations! Milestone achieved.' 
+                  : `Keep logging to earn ${preferences.currency}${(targetGoal - totalPersonalSavings).toLocaleString()} more!`}
+              </Text>
+            </View>
+          </View>
+
+          {/* 3. CATEGORY WATERFALL LEAKS BAR */}
+          <Text style={styles.sectionTitle}>Category Leakage Waterfall</Text>
+          <View style={styles.waterfallCard}>
+            <Text style={styles.waterfallTitle}>Percentage Share of Leakages</Text>
+            <View style={styles.waterfallBar}>
+              {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
+                <View
+                  key={i}
+                  style={{
+                    flex: slice.percent,
+                    backgroundColor: slice.color,
+                    height: 16,
+                  }}
+                />
+              ))}
+              {totalPersonalSpent === 0 && (
+                <View style={{ flex: 1, backgroundColor: '#E5E7EB', height: 16 }} />
+              )}
+            </View>
+
+            <View style={styles.waterfallLegendRow}>
+              {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
+                <View key={i} style={styles.waterfallLegendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                  <Text style={styles.waterfallLabel}>
+                    {slice.label} ({slice.percent}%)
+                  </Text>
+                </View>
               ))}
             </View>
           </View>
@@ -809,37 +913,6 @@ export const AnalyticsScreen = () => {
               <Text style={styles.insightLabel}>Net Inflow</Text>
             </View>
           </ScrollView>
-
-          {/* Month over Month Net Savings Line Graph */}
-          <Text style={styles.sectionTitle}>Month-over-Month Savings Trend</Text>
-          <View style={styles.chartMock}>
-            <View style={styles.chartWithYAxis}>
-              <View style={styles.yAxisLabels}>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxSavings)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}0</Text>
-                <Text style={styles.yAxisText}>-{preferences.currency}{Math.round(maxSavings)}</Text>
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-                  <Path d={`M0,20 L${svgWidth},20`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,75 L${svgWidth},75`} stroke="#D1D5DB" strokeWidth="1.5" strokeDasharray="3 3" />
-                  <Path d={`M0,130 L${svgWidth},130`} stroke="#F3F4F6" strokeWidth="1" />
-
-                  {savingsAreaPath !== '' && <Path d={savingsAreaPath} fill={savingsRate >= 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)"} />}
-                  {savingsLinePath !== '' && <Path d={savingsLinePath} fill="none" stroke={savingsRate >= 0 ? '#10B981' : '#EF4444'} strokeWidth="3" />}
-                </Svg>
-              </View>
-            </View>
-
-            <View style={styles.chartXAxis}>
-              {last6Months.map((m) => (
-                <Text key={m.label} style={styles.xAxisText}>
-                  {m.label}
-                </Text>
-              ))}
-            </View>
-          </View>
         </>
       )}
 
@@ -1264,5 +1337,82 @@ const styles = StyleSheet.create({
   rangeActionText: {
     fontWeight: '700',
     fontSize: 14,
+  },
+  // Savings Goal milestone styles
+  savingsGoalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+  },
+  progressRingContainer: {
+    position: 'relative',
+    width: 90,
+    height: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressRingCenter: {
+    position: 'absolute',
+  },
+  progressPercent: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  goalText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+  },
+  goalStatus: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginVertical: 4,
+  },
+  goalDesc: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+  // Waterfall Card styles
+  waterfallCard: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+  },
+  waterfallTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+    marginBottom: 12,
+  },
+  waterfallBar: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: '#F3F4F6',
+  },
+  waterfallLegendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  waterfallLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  waterfallLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });

@@ -258,7 +258,28 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             await Notifications.scheduleNotificationAsync({
               content: {
                 title: 'ZOVIO Reminder 💰',
-                body: `You have ${currentPrefs.currency}${totalPending} pending from ${count} people`,
+                body: `You have ${currentPrefs.currency}${totalPending} pending from ${count} people. Tap to quick-settle!`,
+                sound: true,
+              },
+              trigger: {
+                hour: hours,
+                minute: minutes,
+                repeats: true,
+              } as any,
+            });
+          } else {
+            // Smart Motivational Booster notifications
+            const messages = [
+              "Wealth consists not in having great possessions, but in having few wants. 🪙 Keep tracking on ZOVIO!",
+              "A budget tells your money where to go instead of wondering where it went. 📈 Check your cash book now!",
+              "Consistency is the secret key to financial freedom. Log your latest logs on ZOVIO! 🌟",
+              "Be mindful of small expenses; a small leak can sink a great ship. Let's audit our leakages! ⛵"
+            ];
+            const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'ZOVIO Money Mindset ☀️',
+                body: randomMsg,
                 sound: true,
               },
               trigger: {
