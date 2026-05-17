@@ -35,6 +35,7 @@ export const ProfileScreen = () => {
   const [notiModalVisible, setNotiModalVisible] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
+  const [guideModalVisible, setGuideModalVisible] = useState(false);
 
   // Profile Edit fields
   const [newName, setNewName] = useState(user.name);
@@ -188,6 +189,14 @@ export const ProfileScreen = () => {
           </View>
           <Icon name="chevron-forward" size={20} color={COLORS.gray} />
         </TouchableOpacity>
+
+        <TouchableOpacity style={s.or} onPress={() => setGuideModalVisible(true)}>
+          <View style={s.ofl}>
+            <Icon name="help-circle-outline" size={20} color={COLORS.gray} />
+            <Text style={s.ot}>How ZOVIO Works</Text>
+          </View>
+          <Icon name="chevron-forward" size={20} color={COLORS.gray} />
+        </TouchableOpacity>
       </View>
 
       {/* Export Section (Feature 3 & 4) */}
@@ -313,6 +322,73 @@ export const ProfileScreen = () => {
               onPress={() => setAboutModalVisible(false)}
             >
               <Text style={s.saveBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 5: How Zovio Works */}
+      <Modal visible={guideModalVisible} animationType="slide" transparent>
+        <View style={s.modalRoot}>
+          <View style={[s.modalContent, { maxWidth: 380, maxHeight: '85%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#EEE', paddingBottom: 10 }}>
+              <Text style={[s.modalTitle, { marginBottom: 0 }]}>📖 How ZOVIO Works</Text>
+              <TouchableOpacity onPress={() => setGuideModalVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingBottom: 20 }}>
+              {/* Card 1 */}
+              <View style={s.guideCard}>
+                <View style={s.guideHeader}>
+                  <Icon name="people" size={20} color={COLORS.primary} />
+                  <Text style={s.guideTitle}>Money Memories (Lending)</Text>
+                </View>
+                <Text style={s.guideText}>
+                  Keep a secure log of cash lent out ("Gave") or borrowed ("Received"). You can select contacts directly from your address book, assign avatars, add occasions, and track settled status.
+                </Text>
+              </View>
+
+              {/* Card 2 */}
+              <View style={s.guideCard}>
+                <View style={s.guideHeader}>
+                  <Icon name="logo-whatsapp" size={20} color="#25D366" />
+                  <Text style={s.guideTitle}>WhatsApp Reminders</Text>
+                </View>
+                <Text style={s.guideText}>
+                  Enable smart reminders. With a single tap, Zovio generates highly personalized, professional payment wicks and launches WhatsApp, taking the awkwardness out of debt collection.
+                </Text>
+              </View>
+
+              {/* Card 3 */}
+              <View style={s.guideCard}>
+                <View style={s.guideHeader}>
+                  <Icon name="bar-chart" size={20} color="#F5C518" />
+                  <Text style={s.guideTitle}>Analytics Suite</Text>
+                </View>
+                <Text style={s.guideText}>
+                  Visualize your wicks with 8 advanced SVG charts: Japanese Candlesticks, Expense Trends, Stacked bars, Radar pentagons, and Speedometer saving trackers styled in beautiful yellow-and-white.
+                </Text>
+              </View>
+
+              {/* Card 4 */}
+              <View style={s.guideCard}>
+                <View style={s.guideHeader}>
+                  <Icon name="shield-checkmark" size={20} color="#10B981" />
+                  <Text style={s.guideTitle}>Hacker-Proof Secure Backups</Text>
+                </View>
+                <Text style={s.guideText}>
+                  Backups are fully dynamic-salted AES encrypted with FNV-1a checksums to block tampering. Unused backup logs are auto-cleaned. Restore your secure database instantly upon new app installations!
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[s.saveBtn, { marginTop: 10 }]}
+              onPress={() => setGuideModalVisible(false)}
+            >
+              <Text style={s.saveBtnText}>Got It, Thanks!</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -478,5 +554,28 @@ const s = StyleSheet.create({
   aboutText: {
     fontSize: 14,
     color: COLORS.text,
+  },
+  guideCard: {
+    backgroundColor: '#FFFDF4',
+    borderWidth: 1.5,
+    borderColor: '#1A1A2E',
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  guideTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A2E',
+  },
+  guideText: {
+    fontSize: 12,
+    color: COLORS.gray,
+    lineHeight: 18,
   },
 });
