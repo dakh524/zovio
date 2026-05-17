@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import Svg, { Circle, Path, Rect, Line } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Line, Polygon, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useZovio } from '../store/ZovioContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
@@ -21,6 +21,28 @@ import * as Print from 'expo-print';
 import * as XLSX from 'xlsx';
 
 const { width } = Dimensions.get('window');
+
+// Robust date string parser to support all platforms and raw local string formats
+const parseDateString = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  let d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d;
+
+  // Format: "17 May 2026"
+  const parts = dateStr.trim().split(' ');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const monthStr = parts[1].toLowerCase();
+    const year = parseInt(parts[2], 10);
+
+    const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const monthIdx = months.indexOf(monthStr.substring(0, 3));
+    if (monthIdx !== -1 && !isNaN(day) && !isNaN(year)) {
+      return new Date(year, monthIdx, day);
+    }
+  }
+  return new Date();
+};
 
 export const AnalyticsScreen = () => {
   const { memories, preferences, finances } = useZovio();
@@ -38,14 +60,12 @@ export const AnalyticsScreen = () => {
   // Helper: Filter records by timeframe or custom range
   const getFilteredMemories = () => {
     return memories.filter((m) => {
-      const recordDate = new Date(m.date);
-      if (isNaN(recordDate.getTime())) return true; // fallback
-
+      const recordDate = parseDateString(m.date);
       if (isCustomRange) {
-        const rDate = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate()).getTime();
-        const sDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-        const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
-        return rDate >= sDate && rDate <= eDate;
+        const rTime = recordDate.getTime();
+        const sTime = new Date(startDate).setHours(0, 0, 0, 0);
+        const eTime = new Date(endDate).setHours(23, 59, 59, 999);
+        return rTime >= sTime && rTime <= eTime;
       }
 
       const now = new Date();
@@ -61,14 +81,12 @@ export const AnalyticsScreen = () => {
 
   const getFilteredFinances = () => {
     return finances.filter((f) => {
-      const recordDate = new Date(f.date);
-      if (isNaN(recordDate.getTime())) return true;
-
+      const recordDate = parseDateString(f.date);
       if (isCustomRange) {
-        const rDate = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate()).getTime();
-        const sDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-        const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
-        return rDate >= sDate && rDate <= eDate;
+        const rTime = recordDate.getTime();
+        const sTime = new Date(startDate).setHours(0, 0, 0, 0);
+        const eTime = new Date(endDate).setHours(23, 59, 59, 999);
+        return rTime >= sTime && rTime <= eTime;
       }
 
       const now = new Date();
@@ -222,10 +240,10 @@ export const AnalyticsScreen = () => {
   };
 
   // ==========================================
-  // FRIENDS & FAMILY CALCULATIONS
+  // FRIENDS & FAMILY SPECS & CALCULATIONS
   // ==========================================
   const categories = ['Food & Dining', 'Petrol', 'Transport', 'Shopping', 'Others'];
-  const categoryColors = ['#F5C518', '#3B82F6', '#EF4444', '#10B981', '#9CA3AF'];
+  const categoryColors = ['#F5C518', '#34D399', '#EF4444', '#60A5FA', '#A78BFA'];
 
   const categoryTotals = categories.reduce((acc, cat) => {
     acc[cat] = filtered
@@ -267,7 +285,7 @@ export const AnalyticsScreen = () => {
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const totals = days.map((_, index) => {
         const dayRecords = filtered.filter((m) => {
-          const d = new Date(m.date).getDay();
+          const d = parseDateString(m.date).getDay();
           const targetDay = index === 6 ? 0 : index + 1;
           return d === targetDay;
         });
@@ -275,43 +293,50 @@ export const AnalyticsScreen = () => {
       });
       return { labels: days, data: totals };
     } else if (timeframe === 'Month') {
-      const days = Array.from({ length: 15 }, (_, i) => `${(i + 1) * 2}`);
-      const totals = days.map((_, idx) => {
-        const startDay = idx * 2;
-        const endDay = (idx + 1) * 2;
+      const periods = ['1-7', '8-15', '16-23', '24-31'];
+      const totals = periods.map((_, idx) => {
+        const startDay = idx * 8 + 1;
+        const endDay = Math.min(31, (idx + 1) * 8);
         const dayRecords = filtered.filter((m) => {
-          const dateNum = new Date(m.date).getDate();
+          const dateNum = parseDateString(m.date).getDate();
           return dateNum >= startDay && dateNum <= endDay;
         });
         return dayRecords.reduce((sum, m) => sum + m.amount, 0);
       });
-      return { labels: ['1', '5', '10', '15', '20', '25', '30'], data: totals };
+      return { labels: periods, data: totals };
     } else {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const totals = months.map((_, index) => {
-        const monthRecords = filtered.filter((m) => new Date(m.date).getMonth() === index);
+      const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+      const totals = quarters.map((_, idx) => {
+        const monthRecords = filtered.filter((m) => {
+          const month = parseDateString(m.date).getMonth();
+          return month >= idx * 3 && month < (idx + 1) * 3;
+        });
         return monthRecords.reduce((sum, m) => sum + m.amount, 0);
       });
-      return { labels: ['Q1', 'Q2', 'Q3', 'Q4'], data: totals };
+      return { labels: quarters, data: totals };
     }
   };
 
   const trend = getTrendData();
   const maxVal = Math.max(...trend.data, 1000);
 
-  const svgWidth = 300;
+  const svgWidth = 320;
   const svgHeight = 150;
-  const paddingX = 10;
+  const paddingX = 15;
   const paddingY = 20;
 
   const points = trend.data.map((val, idx) => {
     const x = paddingX + (idx / (trend.data.length - 1)) * (svgWidth - 2 * paddingX);
     const y = svgHeight - paddingY - (val / maxVal) * (svgHeight - 2 * paddingY);
-    return { x, y };
+    return { x, y, value: val };
   });
 
   const linePath = points.reduce((path, pt, i) => (i === 0 ? `M${pt.x},${pt.y}` : `${path} L${pt.x},${pt.y}`), '');
   const areaPath = points.length > 0 ? `${linePath} L${points[points.length - 1].x},${svgHeight - paddingY} L${points[0].x},${svgHeight - paddingY} Z` : '';
+
+  // Node highlight logic matching the circular pulsating selected node callout (30 node design in image)
+  const maxPointIdx = points.reduce((maxIdx, pt, idx, arr) => (pt.value > arr[maxIdx].value ? idx : maxIdx), 0);
+  const selectedNode = points[maxPointIdx];
 
   // Quick Insights (Friends)
   const receivedSum = filtered.filter((m) => m.type === 'received').reduce((sum, m) => sum + m.amount, 0);
@@ -319,10 +344,6 @@ export const AnalyticsScreen = () => {
   const savedThisMonth = receivedSum - gaveSum;
 
   const sortedSpent = Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]);
-  const topSpendCategory = sortedSpent[0] || 'N/A';
-  const pendingDuesCount = filtered.filter((m) => m.status === 'pending').length;
-
-  // Friends analytics
   const avgLendingSize = filtered.length > 0 ? Math.round(gaveSum / filtered.length) : 0;
   const outstandingBalMap = filtered.filter(m => m.status === 'pending').reduce((acc, m) => {
     const w = m.type === 'gave' ? m.amount : -m.amount;
@@ -335,7 +356,7 @@ export const AnalyticsScreen = () => {
   const highestDebtorAmt = outstandingBalMap[highestDebtorName] || 0;
 
   // ==========================================
-  // PERSONAL FINANCE CALCULATIONS
+  // PERSONAL FINANCE SPECS & CALCULATIONS
   // ==========================================
   const getLast6Months = () => {
     const result = [];
@@ -358,10 +379,8 @@ export const AnalyticsScreen = () => {
     return { label: m.label, income, expense };
   });
 
-  const maxBarVal = Math.max(...monthlyBarData.map((d) => Math.max(d.income, d.expense)), 1000);
-
   const expenseCategories = ['Rent', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Other'];
-  const expenseColors = ['#EF4444', '#F5C518', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#9CA3AF'];
+  const expenseColors = ['#F87171', '#F5C518', '#60A5FA', '#34D399', '#A78BFA', '#F472B6', '#9CA3AF'];
 
   const personalCategoryTotals = expenseCategories.reduce((acc, cat) => {
     acc[cat] = filteredFinances
@@ -402,71 +421,85 @@ export const AnalyticsScreen = () => {
 
   // Dynamic Efficiency Score
   const getEfficiencyScore = () => {
-    if (savingsRate > 35) return { badge: 'Super Saving 🌟', desc: 'Outstanding asset generation!', color: '#10B981' };
-    if (savingsRate > 15) return { badge: 'Healthy 👍', desc: 'Secure asset accumulation.', color: '#3B82F6' };
-    if (savingsRate >= 0) return { badge: 'Tight ⚠️', desc: 'Expenses are close to earnings.', color: '#F5C518' };
-    return { badge: 'Deficit 🚨', desc: 'Spending exceeds total earnings.', color: '#EF4444' };
+    if (savingsRate > 35) return { badge: 'High Asset Build 🌟', desc: 'Fantastic cash utilization rate!', color: '#34D399' };
+    if (savingsRate > 15) return { badge: 'Balanced Growth 👍', desc: 'Secure reserves accumulated.', color: '#60A5FA' };
+    if (savingsRate >= 0) return { badge: 'Tight Position ⚠️', desc: 'Drains match total cash inflow.', color: '#F5C518' };
+    return { badge: 'Capital Deficit 🚨', desc: 'Cash outflows exceed monthly income.', color: '#F87171' };
   };
   const healthScore = getEfficiencyScore();
 
-  const monthlySavings = last6Months.map((m) => {
-    const monthFinances = filteredFinances.filter((f) => f.date.startsWith(m.key));
-    const income = monthFinances.filter((f) => f.type === 'income').reduce((sum, f) => sum + f.amount, 0);
-    const expense = monthFinances.filter((f) => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
-    return income - expense;
-  });
-
-  const maxSavings = Math.max(...monthlySavings.map(Math.abs), 1000);
-  const savingsPoints = monthlySavings.map((val, idx) => {
-    const x = paddingX + (idx / (monthlySavings.length - 1)) * (svgWidth - 2 * paddingX);
-    const midY = svgHeight / 2;
-    const y = midY - (val / maxSavings) * (midY - paddingY);
-    return { x, y };
-  });
-
-  const savingsLinePath = savingsPoints.reduce((path, pt, i) => (i === 0 ? `M${pt.x},${pt.y}` : `${path} L${pt.x},${pt.y}`), '');
-  const savingsAreaPath = savingsPoints.length > 0
-    ? `${savingsLinePath} L${savingsPoints[savingsPoints.length - 1].x},${svgHeight / 2} L${savingsPoints[0].x},${svgHeight / 2} Z`
-    : '';
-
   // ==========================================
-  // NEW INTERACTIVE JAPANESE CANDLESTICK BUILDER
+  // NEW HIGH-TECH INTERACTIVE JAPANESE CANDLESTICK BUILDER
   // ==========================================
   const candlestickData = last6Months.map((m) => {
     const monthFinances = filteredFinances.filter((f) => f.date.startsWith(m.key));
-    
-    // Compute Open (cash balance at start of month - simulated by starting at ₹2000 base)
     const open = 2000;
-    // Compute Close (Ending balance)
     const income = monthFinances.filter((f) => f.type === 'income').reduce((sum, f) => sum + f.amount, 0);
     const expense = monthFinances.filter((f) => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
     const close = open + (income - expense);
-
-    // Compute High / Low values during month
     const high = Math.max(open, close, open + income);
     const low = Math.min(open, close, Math.max(0, open - expense));
-
     return { label: m.label, open, close, high, low };
   });
 
   const maxCandleVal = Math.max(...candlestickData.map(c => c.high), 5000);
 
   // ==========================================
-  // SAVINGS GOAL RADAR MILESTONE
+  // HIGH-TECH RADAR SPIDER GRAPH MILESTONE
   // ==========================================
+  const radarRadius = 45;
+  const radarCenter = 75;
+  const maxRadarVal = Math.max(...Object.values(categoryTotals), 1000);
+
+  const radarPoints = categories.map((cat, i) => {
+    const amt = categoryTotals[cat];
+    const val = maxRadarVal > 0 ? (amt / maxRadarVal) * radarRadius : 0;
+    const angle = i * (2 * Math.PI / 5) - Math.PI / 2;
+    const x = radarCenter + val * Math.cos(angle);
+    const y = radarCenter + val * Math.sin(angle);
+    return { x, y, label: cat };
+  });
+
+  const radarPolygonPath = radarPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+  // Pentagon Grid Mesh helper
+  const drawPentagonGrid = (scale: number) => {
+    return categories.map((_, i) => {
+      const angle = i * (2 * Math.PI / 5) - Math.PI / 2;
+      const x = radarCenter + (radarRadius * scale) * Math.cos(angle);
+      const y = radarCenter + (radarRadius * scale) * Math.sin(angle);
+      return `${x},${y}`;
+    }).join(' ');
+  };
+
+  // Speedometer circular gauge milestone
   const targetGoal = 25000;
   const goalProgress = Math.min(100, Math.max(0, Math.round((totalPersonalSavings / targetGoal) * 100)));
+
+  // Cyber Panel Card wrapping element to display corners perfectly
+  const CyberPanel = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <View style={styles.cyberCard}>
+      {/* Absolute Corner Anchors */}
+      <View style={[styles.corner, styles.cornerTL]} />
+      <View style={[styles.corner, styles.cornerTR]} />
+      <View style={[styles.corner, styles.cornerBL]} />
+      <View style={[styles.corner, styles.cornerBR]} />
+
+      <Text style={styles.panelTitle}>{title}</Text>
+      {children}
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Analytics</Text>
-        <TouchableOpacity onPress={() => setRangeModalVisible(true)}>
-          <Icon 
-            name="calendar-outline" 
-            size={24} 
-            color={isCustomRange ? COLORS.primary : COLORS.text} 
+        <Text style={styles.title}>Audit & Insights</Text>
+        <TouchableOpacity style={styles.calendarBtn} onPress={() => setRangeModalVisible(true)}>
+          <Icon
+            name="calendar-outline"
+            size={20}
+            color={isCustomRange ? COLORS.primary : '#FFFFFF'}
           />
         </TouchableOpacity>
       </View>
@@ -475,10 +508,10 @@ export const AnalyticsScreen = () => {
       {isCustomRange && (
         <View style={styles.customRangeIndicator}>
           <Text style={styles.customRangeText}>
-            📅 Custom Range: {startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}
+            📅 {startDate.toLocaleDateString()} — {endDate.toLocaleDateString()}
           </Text>
           <TouchableOpacity onPress={() => setIsCustomRange(false)}>
-            <Icon name="close-circle" size={18} color="#EF4444" />
+            <Icon name="close-circle" size={18} color="#F87171" />
           </TouchableOpacity>
         </View>
       )}
@@ -490,7 +523,7 @@ export const AnalyticsScreen = () => {
           onPress={() => setTrack('friends')}
         >
           <Text style={[styles.trackBtnText, track === 'friends' && styles.trackBtnTextActive]}>
-            Friends & Family
+            Family Lending Ledger
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -498,14 +531,14 @@ export const AnalyticsScreen = () => {
           onPress={() => setTrack('personal')}
         >
           <Text style={[styles.trackBtnText, track === 'personal' && styles.trackBtnTextActive]}>
-            Personal Finance
+            Personal Finance Desk
           </Text>
         </TouchableOpacity>
       </View>
 
       {track === 'friends' ? (
         <>
-          {/* Timeframe Selector (Only if custom range is not active) */}
+          {/* Timeframe Selector */}
           {!isCustomRange && (
             <View style={styles.segmentControl}>
               {(['Week', 'Month', 'Year'] as const).map((t) => (
@@ -520,136 +553,205 @@ export const AnalyticsScreen = () => {
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>Spending Overview</Text>
-
-          {/* Donut Card */}
-          <View style={styles.overviewCard}>
-            <View style={styles.donutContainer}>
-              <Svg width={120} height={120} viewBox="0 0 120 120">
-                {totalSpent === 0 ? (
-                  <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="20" fill="transparent" />
-                ) : (
-                  donutSlices.map((slice, i) => (
-                    <Circle
-                      key={i}
-                      cx="60"
-                      cy="60"
-                      r="45"
-                      stroke={slice.color}
-                      strokeWidth="20"
-                      strokeDasharray={slice.dasharray}
-                      fill="transparent"
-                      rotation={slice.rotation}
-                      origin="60, 60"
-                    />
-                  ))
-                )}
-              </Svg>
-              <View style={styles.donutCenter}>
-                <Text style={styles.donutAmount}>
-                  {preferences.currency}
-                  {totalSpent.toLocaleString()}
-                </Text>
-                <Text style={styles.donutLabel}>Total</Text>
-              </View>
-            </View>
-
-            {/* Legend */}
-            <View style={styles.legendContainer}>
-              {donutSlices.map((slice, i) => (
-                <View key={i} style={styles.legendRow}>
-                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                  <View style={styles.legendText}>
-                    <Text style={styles.legendLabel}>{slice.label}</Text>
-                    <Text style={styles.legendPercent}>{slice.percent}%</Text>
-                  </View>
-                  <Text style={styles.legendAmount}>
-                    {preferences.currency}
-                    {slice.amount.toLocaleString()}
-                  </Text>
+          {/* 1. AREA LINE CHART WITH SELECT HALO (折线面积图) */}
+          <CyberPanel title="折线面积图 — Expense Trend">
+            <View style={styles.chartWrapper}>
+              <View style={styles.chartWithYAxis}>
+                <View style={styles.yAxisLabels}>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxVal)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxVal * 0.5)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}0</Text>
                 </View>
-              ))}
-            </View>
-          </View>
 
-          {/* Expense Trend Card */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Expense Trend</Text>
-            {!isCustomRange && (
-              <Text style={styles.dropdownText}>
-                This {timeframe} <Icon name="chevron-down" size={12} />
-              </Text>
-            )}
-          </View>
+                <View style={{ flex: 1 }}>
+                  <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+                    <Defs>
+                      <LinearGradient id="glowingArea" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor="#A78BFA" stopOpacity="0.4" />
+                        <Stop offset="100%" stopColor="#A78BFA" stopOpacity="0.0" />
+                      </LinearGradient>
+                    </Defs>
+                    {/* Grid Background Lines */}
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,65 L${svgWidth},65`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,110 L${svgWidth},110`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#1F1F35" strokeWidth="1" />
 
-          <View style={styles.chartMock}>
-            <View style={styles.chartWithYAxis}>
-              {/* Y Axis Labels */}
-              <View style={styles.yAxisLabels}>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxVal)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxVal * 0.6)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxVal * 0.3)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}0</Text>
+                    {/* Area path with glowing gradient */}
+                    {areaPath !== '' && <Path d={areaPath} fill="url(#glowingArea)" />}
+
+                    {/* Smooth Neon line */}
+                    {linePath !== '' && <Path d={linePath} fill="none" stroke="#A78BFA" strokeWidth="2.5" />}
+
+                    {/* Node Selector Highlight Halo Rings (Exactly like the "glowing 30 node" in reference) */}
+                    {selectedNode && (
+                      <>
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="10" fill="rgba(167, 139, 250, 0.25)" />
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="6" fill="rgba(167, 139, 250, 0.5)" />
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="3" fill="#FFFFFF" />
+                        {/* Callout floating box */}
+                        <Rect
+                          x={selectedNode.x - 22}
+                          y={selectedNode.y - 28}
+                          width="44"
+                          height="18"
+                          rx="4"
+                          fill="#1A1A2E"
+                          stroke="#A78BFA"
+                          strokeWidth="1"
+                        />
+                        <SvgText
+                          x={selectedNode.x}
+                          y={selectedNode.y - 15}
+                          fill="#A78BFA"
+                          fontSize="9"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                        >
+                          {preferences.currency}{selectedNode.value}
+                        </SvgText>
+                      </>
+                    )}
+                  </Svg>
+                </View>
               </View>
 
-              {/* SVG Line Graph */}
-              <View style={{ flex: 1 }}>
-                <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-                  <Path d={`M0,20 L${svgWidth},20`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,65 L${svgWidth},65`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,110 L${svgWidth},110`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,130 L${svgWidth},130`} stroke="#F3F4F6" strokeWidth="1" />
+              <View style={styles.chartXAxis}>
+                {trend.labels.map((d) => (
+                  <Text key={d} style={styles.xAxisText}>{d}</Text>
+                ))}
+              </View>
+            </View>
+          </CyberPanel>
 
-                  {areaPath !== '' && <Path d={areaPath} fill="rgba(245, 197, 24, 0.15)" />}
-                  {linePath !== '' && <Path d={linePath} fill="none" stroke={COLORS.primary} strokeWidth="3" />}
+          {/* 2. HIGH-TECH RADAR SPIDER CHART (雷达图) */}
+          <CyberPanel title="雷达图 — Categories Analysis">
+            <View style={styles.radarLayout}>
+              <View style={styles.radarGraphic}>
+                <Svg width={150} height={150} viewBox="0 0 150 150">
+                  {/* Outer & Inner Pentagonal Grid Lines */}
+                  <Polygon points={drawPentagonGrid(1.0)} fill="none" stroke="#1F1F35" strokeWidth="1" />
+                  <Polygon points={drawPentagonGrid(0.7)} fill="none" stroke="#1F1F35" strokeWidth="0.8" />
+                  <Polygon points={drawPentagonGrid(0.4)} fill="none" stroke="#1F1F35" strokeWidth="0.5" />
+
+                  {/* Pentagonal Axes Web lines */}
+                  {categories.map((_, i) => {
+                    const angle = i * (2 * Math.PI / 5) - Math.PI / 2;
+                    const x = radarCenter + radarRadius * Math.cos(angle);
+                    const y = radarCenter + radarRadius * Math.sin(angle);
+                    return (
+                      <Line key={i} x1={radarCenter} y1={radarCenter} x2={x} y2={y} stroke="#1F1F35" strokeWidth="1" />
+                    );
+                  })}
+
+                  {/* Filled Semi-transparent Web Polygon */}
+                  {radarPolygonPath !== '' && (
+                    <Polygon
+                      points={radarPolygonPath}
+                      fill="rgba(167, 139, 250, 0.2)"
+                      stroke="#A78BFA"
+                      strokeWidth="1.5"
+                    />
+                  )}
+
+                  {/* Node circular dots */}
+                  {radarPoints.map((pt, i) => (
+                    <Circle key={i} cx={pt.x} cy={pt.y} r="2.5" fill="#FFFFFF" stroke="#A78BFA" strokeWidth="1" />
+                  ))}
                 </Svg>
               </View>
-            </View>
 
-            <View style={styles.chartXAxis}>
-              {trend.labels.map((d) => (
-                <Text key={d} style={styles.xAxisText}>
-                  {d}
-                </Text>
-              ))}
+              {/* Labels list */}
+              <View style={styles.radarLegend}>
+                {categories.map((cat, i) => (
+                  <View key={i} style={styles.radarLegendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: categoryColors[i] }]} />
+                    <Text style={styles.radarLegendLabel}>{cat}:</Text>
+                    <Text style={styles.radarLegendVal}>{preferences.currency}{categoryTotals[cat].toLocaleString()}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          </CyberPanel>
 
-          {/* Quick Insights */}
-          <Text style={styles.sectionTitle}>Lending Insights</Text>
+          {/* Donut Card Distribution */}
+          <CyberPanel title="饼图 — Lending Distribution">
+            <View style={styles.donutOverview}>
+              <View style={styles.donutContainer}>
+                <Svg width={110} height={110} viewBox="0 0 120 120">
+                  {totalSpent === 0 ? (
+                    <Circle cx="60" cy="60" r="45" stroke="#1F1F35" strokeWidth="14" fill="transparent" />
+                  ) : (
+                    donutSlices.map((slice, i) => (
+                      <Circle
+                        key={i}
+                        cx="60"
+                        cy="60"
+                        r="45"
+                        stroke={slice.color}
+                        strokeWidth="14"
+                        strokeDasharray={slice.dasharray}
+                        fill="transparent"
+                        rotation={slice.rotation}
+                        origin="60, 60"
+                      />
+                    ))
+                  )}
+                </Svg>
+                <View style={styles.donutCenter}>
+                  <Text style={styles.donutAmount}>
+                    {preferences.currency}{totalSpent.toLocaleString()}
+                  </Text>
+                  <Text style={styles.donutLabel}>Total spent</Text>
+                </View>
+              </View>
+
+              <View style={styles.legendContainer}>
+                {donutSlices.map((slice, i) => (
+                  <View key={i} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                    <View style={styles.legendText}>
+                      <Text style={styles.legendLabel}>{slice.label}</Text>
+                      <Text style={styles.legendPercent}>{slice.percent}%</Text>
+                    </View>
+                    <Text style={styles.legendAmount}>
+                      {preferences.currency}{slice.amount.toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </CyberPanel>
+
+          {/* Quick Insights deck */}
+          <Text style={styles.deckTitle}>Audit Intelligence Cards</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.insightsRow}>
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: COLORS.warningSoft }]}>
-                <Icon name="star" size={20} color={COLORS.primary} />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(245, 197, 24, 0.1)' }]}>
+                <Icon name="star" size={18} color="#F5C518" />
               </View>
               <Text style={styles.insightValue}>
-                {preferences.currency}
-                {savedThisMonth.toLocaleString()}
+                {preferences.currency}{savedThisMonth.toLocaleString()}
               </Text>
               <Text style={styles.insightLabel}>Lending Balance</Text>
             </View>
 
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: COLORS.warningSoft }]}>
-                <Icon name="wallet" size={20} color={COLORS.primary} />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(167, 139, 250, 0.1)' }]}>
+                <Icon name="wallet" size={18} color="#A78BFA" />
               </View>
               <Text style={styles.insightValue}>
-                {preferences.currency}
-                {avgLendingSize.toLocaleString()}
+                {preferences.currency}{avgLendingSize.toLocaleString()}
               </Text>
-              <Text style={styles.insightLabel}>Avg Transaction</Text>
+              <Text style={styles.insightLabel}>Avg Lending Size</Text>
             </View>
 
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: '#E0F2FE' }]}>
-                <Icon name="people" size={20} color="#0284C7" />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(96, 165, 250, 0.1)' }]}>
+                <Icon name="person" size={18} color="#60A5FA" />
               </View>
-              <Text style={styles.insightValue} numberOfLines={1}>
-                {highestDebtorName}
-              </Text>
-              <Text style={styles.insightLabel}>
-                Top Debtor: {preferences.currency}{highestDebtorAmt}
-              </Text>
+              <Text style={styles.insightValue} numberOfLines={1}>{highestDebtorName}</Text>
+              <Text style={styles.insightLabel}>Top Debtor ({preferences.currency}{highestDebtorAmt})</Text>
             </View>
           </ScrollView>
         </>
@@ -657,258 +759,239 @@ export const AnalyticsScreen = () => {
         <>
           {/* PERSONAL FINANCE TRACK */}
           {/* 1. JAPANESE CANDLESTICK CHART */}
-          <Text style={styles.sectionTitle}>Japanese Candlestick Financial Trend (Open / High / Low / Close)</Text>
-          <View style={styles.chartMock}>
-            <View style={styles.chartWithYAxis}>
-              <View style={styles.yAxisLabels}>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal * 0.5)}</Text>
-                <Text style={styles.yAxisText}>{preferences.currency}0</Text>
+          <CyberPanel title="日本蜡烛图 — Japanese Candlestick Trend">
+            <View style={styles.chartWrapper}>
+              <View style={styles.chartWithYAxis}>
+                <View style={styles.yAxisLabels}>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxCandleVal * 0.5)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}0</Text>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,75 L${svgWidth},75`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#1F1F35" strokeWidth="1" />
+
+                    {candlestickData.map((c, idx) => {
+                      const stepX = (svgWidth - 20) / 6;
+                      const baseX = 20 + idx * stepX;
+                      const candleW = 12;
+
+                      const openY = 130 - (c.open / maxCandleVal) * 100;
+                      const closeY = 130 - (c.close / maxCandleVal) * 100;
+                      const highY = 130 - (c.high / maxCandleVal) * 100;
+                      const lowY = 130 - (c.low / maxCandleVal) * 100;
+
+                      const isBullish = c.close >= c.open;
+                      const candleColor = isBullish ? '#34D399' : '#F87171';
+
+                      return (
+                        <React.Fragment key={idx}>
+                          {/* Wick Line */}
+                          <Line
+                            x1={baseX + candleW / 2}
+                            y1={highY}
+                            x2={baseX + candleW / 2}
+                            y2={lowY}
+                            stroke={candleColor}
+                            strokeWidth="1.5"
+                          />
+                          {/* Candle Solid Body */}
+                          <Rect
+                            x={baseX}
+                            y={Math.min(openY, closeY)}
+                            width={candleW}
+                            height={Math.max(4, Math.abs(openY - closeY))}
+                            fill={candleColor}
+                            rx="1.5"
+                          />
+                        </React.Fragment>
+                      );
+                    })}
+                  </Svg>
+                </View>
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-                  <Path d={`M0,20 L${svgWidth},20`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,75 L${svgWidth},75`} stroke="#F3F4F6" strokeWidth="1" />
-                  <Path d={`M0,130 L${svgWidth},130`} stroke="#F3F4F6" strokeWidth="1" />
+              <View style={styles.chartXAxis}>
+                {candlestickData.map((c) => (
+                  <Text key={c.label} style={styles.xAxisText}>{c.label}</Text>
+                ))}
+              </View>
+            </View>
+          </CyberPanel>
 
-                  {candlestickData.map((c, idx) => {
-                    const stepX = (svgWidth - 20) / 6;
-                    const baseX = 20 + idx * stepX;
-                    const candleW = 14;
-
-                    const openY = 130 - (c.open / maxCandleVal) * 100;
-                    const closeY = 130 - (c.close / maxCandleVal) * 100;
-                    const highY = 130 - (c.high / maxCandleVal) * 100;
-                    const lowY = 130 - (c.low / maxCandleVal) * 100;
-
-                    const isBullish = c.close >= c.open;
-                    const candleColor = isBullish ? '#10B981' : '#EF4444';
-
-                    return (
-                      <React.Fragment key={idx}>
-                        {/* Upper Wick */}
-                        <Line
-                          x1={baseX + candleW / 2}
-                          y1={highY}
-                          x2={baseX + candleW / 2}
-                          y2={Math.min(openY, closeY)}
-                          stroke={candleColor}
-                          strokeWidth="2"
-                        />
-                        {/* Body */}
-                        <Rect
-                          x={baseX}
-                          y={Math.min(openY, closeY)}
-                          width={candleW}
-                          height={Math.max(4, Math.abs(openY - closeY))}
-                          fill={candleColor}
-                          rx="2"
-                        />
-                        {/* Lower Wick */}
-                        <Line
-                          x1={baseX + candleW / 2}
-                          y1={Math.max(openY, closeY)}
-                          x2={baseX + candleW / 2}
-                          y2={lowY}
-                          stroke={candleColor}
-                          strokeWidth="2"
-                        />
-                      </React.Fragment>
-                    );
-                  })}
+          {/* 2. SEGMENTED CIRCULAR GAUGE SPEEDOMETER (仪表盘) */}
+          <CyberPanel title="仪表盘 — Savings Ring Speedometer">
+            <View style={styles.gaugeContainer}>
+              <View style={styles.gaugeGraphic}>
+                <Svg width={110} height={110} viewBox="0 0 100 100">
+                  {/* Outer Speedometer ticks ring */}
+                  <Circle
+                    cx="50"
+                    cy="50"
+                    r="42"
+                    fill="transparent"
+                    stroke="#1F1F35"
+                    strokeWidth="4"
+                    strokeDasharray="2, 6"
+                  />
+                  {/* Gauge active progress circle */}
+                  <Circle
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    fill="transparent"
+                    stroke="#1F1F35"
+                    strokeWidth="8"
+                  />
+                  <Circle
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    fill="transparent"
+                    stroke="#A78BFA"
+                    strokeWidth="8"
+                    strokeDasharray={`${(goalProgress / 100) * 213.6} 213.6`}
+                    rotation="-90"
+                    origin="50, 50"
+                    strokeLinecap="round"
+                  />
                 </Svg>
-              </View>
-            </View>
-
-            <View style={styles.chartXAxis}>
-              {candlestickData.map((c) => (
-                <Text key={c.label} style={styles.xAxisText}>
-                  {c.label}
-                </Text>
-              ))}
-            </View>
-          </View>
-
-          {/* 2. SAVINGS GOAL RADAR PROGRESS GAUGE */}
-          <Text style={styles.sectionTitle}>Savings Goal Milestone (Target: {preferences.currency}25,000)</Text>
-          <View style={styles.savingsGoalCard}>
-            <View style={styles.progressRingContainer}>
-              <Svg width={90} height={90} viewBox="0 0 36 36">
-                <Circle cx="18" cy="18" r="15.91" fill="transparent" stroke="#F3F4F6" strokeWidth="4" />
-                <Circle
-                  cx="18"
-                  cy="18"
-                  r="15.91"
-                  fill="transparent"
-                  stroke={COLORS.primary}
-                  strokeWidth="4"
-                  strokeDasharray={`${goalProgress} 100`}
-                  rotation="-90"
-                  origin="18, 18"
-                />
-              </Svg>
-              <View style={styles.progressRingCenter}>
-                <Text style={styles.progressPercent}>{goalProgress}%</Text>
-              </View>
-            </View>
-            <View style={{ flex: 1, marginLeft: 20 }}>
-              <Text style={styles.goalText}>Target Progress</Text>
-              <Text style={styles.goalStatus}>
-                Saved: {preferences.currency}{totalPersonalSavings.toLocaleString()}
-              </Text>
-              <Text style={styles.goalDesc}>
-                {goalProgress >= 100 
-                  ? '🎉 Congratulations! Milestone achieved.' 
-                  : `Keep logging to earn ${preferences.currency}${(targetGoal - totalPersonalSavings).toLocaleString()} more!`}
-              </Text>
-            </View>
-          </View>
-
-          {/* 3. CATEGORY WATERFALL LEAKS BAR */}
-          <Text style={styles.sectionTitle}>Category Leakage Waterfall</Text>
-          <View style={styles.waterfallCard}>
-            <Text style={styles.waterfallTitle}>Percentage Share of Leakages</Text>
-            <View style={styles.waterfallBar}>
-              {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
-                <View
-                  key={i}
-                  style={{
-                    flex: slice.percent,
-                    backgroundColor: slice.color,
-                    height: 16,
-                  }}
-                />
-              ))}
-              {totalPersonalSpent === 0 && (
-                <View style={{ flex: 1, backgroundColor: '#E5E7EB', height: 16 }} />
-              )}
-            </View>
-
-            <View style={styles.waterfallLegendRow}>
-              {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
-                <View key={i} style={styles.waterfallLegendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                  <Text style={styles.waterfallLabel}>
-                    {slice.label} ({slice.percent}%)
-                  </Text>
+                <View style={styles.gaugeCenter}>
+                  <Text style={styles.gaugePercent}>{goalProgress}%</Text>
+                  <Text style={styles.gaugeLabel}>Efficiency</Text>
                 </View>
-              ))}
-            </View>
-          </View>
+              </View>
 
-          {/* Expense Category Donut */}
-          <Text style={styles.sectionTitle}>Expense Category Distribution</Text>
-          <View style={styles.overviewCard}>
-            <View style={styles.donutContainer}>
-              <Svg width={120} height={120} viewBox="0 0 120 120">
-                {totalPersonalSpent === 0 ? (
-                  <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="20" fill="transparent" />
-                ) : (
-                  personalDonutSlices.map((slice, i) => (
-                    <Circle
-                      key={i}
-                      cx="60"
-                      cy="60"
-                      r="45"
-                      stroke={slice.color}
-                      strokeWidth="20"
-                      strokeDasharray={slice.dasharray}
-                      fill="transparent"
-                      rotation={slice.rotation}
-                      origin="60, 60"
-                    />
-                  ))
+              <View style={styles.gaugeLegend}>
+                <Text style={styles.gaugeTitle}>Efficiency Score</Text>
+                <Text style={[styles.gaugeStatus, { color: healthScore.color }]}>{healthScore.badge}</Text>
+                <Text style={styles.gaugeDesc}>{healthScore.desc}</Text>
+                <Text style={styles.gaugeGoalSub}>
+                  Saved: {preferences.currency}{totalPersonalSavings.toLocaleString()} / {preferences.currency}{targetGoal.toLocaleString()}
+                </Text>
+              </View>
+            </View>
+          </CyberPanel>
+
+          {/* 3. CATEGORY LEAKAGE WATERFALL PROGRESS PANEL (横向柱状图) */}
+          <CyberPanel title="横向柱状图 — Category Leakage share">
+            <View style={styles.waterfallWrapper}>
+              <Text style={styles.waterfallTitle}>Percentage Leaked Share</Text>
+              <View style={styles.waterfallBar}>
+                {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      flex: slice.percent,
+                      backgroundColor: slice.color,
+                      height: 12,
+                    }}
+                  />
+                ))}
+                {totalPersonalSpent === 0 && (
+                  <View style={{ flex: 1, backgroundColor: '#1F1F35', height: 12 }} />
                 )}
-              </Svg>
-              <View style={styles.donutCenter}>
-                <Text style={styles.donutAmount}>
-                  {preferences.currency}
-                  {totalPersonalSpent.toLocaleString()}
-                </Text>
-                <Text style={styles.donutLabel}>Spent</Text>
+              </View>
+
+              <View style={styles.waterfallLegendRow}>
+                {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
+                  <View key={i} style={styles.waterfallLegendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                    <Text style={styles.waterfallLabel}>
+                      {slice.label} ({slice.percent}%)
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
+          </CyberPanel>
 
-            {/* Legend */}
-            <View style={styles.legendContainer}>
-              {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
-                <View key={i} style={styles.legendRow}>
-                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
-                  <View style={styles.legendText}>
-                    <Text style={styles.legendLabel}>{slice.label}</Text>
-                    <Text style={styles.legendPercent}>{slice.percent}%</Text>
-                  </View>
-                  <Text style={styles.legendAmount}>
-                    {preferences.currency}
-                    {slice.amount.toLocaleString()}
+          {/* Category Donut Distribution */}
+          <CyberPanel title="饼图 — Personal Outflows Share">
+            <View style={styles.donutOverview}>
+              <View style={styles.donutContainer}>
+                <Svg width={110} height={110} viewBox="0 0 120 120">
+                  {totalPersonalSpent === 0 ? (
+                    <Circle cx="60" cy="60" r="45" stroke="#1F1F35" strokeWidth="14" fill="transparent" />
+                  ) : (
+                    personalDonutSlices.map((slice, i) => (
+                      <Circle
+                        key={i}
+                        cx="60"
+                        cy="60"
+                        r="45"
+                        stroke={slice.color}
+                        strokeWidth="14"
+                        strokeDasharray={slice.dasharray}
+                        fill="transparent"
+                        rotation={slice.rotation}
+                        origin="60, 60"
+                      />
+                    ))
+                  )}
+                </Svg>
+                <View style={styles.donutCenter}>
+                  <Text style={styles.donutAmount}>
+                    {preferences.currency}{totalPersonalSpent.toLocaleString()}
                   </Text>
+                  <Text style={styles.donutLabel}>Spent</Text>
                 </View>
-              ))}
-              {totalPersonalSpent === 0 && (
-                <Text style={{ fontSize: 12, color: COLORS.gray }}>No personal expenses logged yet.</Text>
-              )}
-            </View>
-          </View>
+              </View>
 
-          {/* Deep Personal Finance Insights */}
-          <Text style={styles.sectionTitle}>Personal Financial Health</Text>
-          <View style={styles.savingsRateCard}>
-            <Svg width={70} height={70} viewBox="0 0 36 36">
-              <Circle cx="18" cy="18" r="15.91" fill="transparent" stroke="#E5E7EB" strokeWidth="3" />
-              <Circle
-                cx="18"
-                cy="18"
-                r="15.91"
-                fill="transparent"
-                stroke={savingsRate >= 0 ? '#10B981' : '#EF4444'}
-                strokeWidth="3"
-                strokeDasharray={`${Math.max(0, Math.min(100, Math.abs(savingsRate)))} 100`}
-                rotation="-90"
-                origin="18, 18"
-              />
-            </Svg>
-            <View style={{ flex: 1, marginLeft: 16 }}>
-              <Text style={[styles.savingsRateText, { color: healthScore.color }]}>
-                {healthScore.badge} ({savingsRate}%)
-              </Text>
-              <Text style={styles.savingsRateLabel}>{healthScore.desc}</Text>
+              <View style={styles.legendContainer}>
+                {personalDonutSlices.filter(s => s.amount > 0).map((slice, i) => (
+                  <View key={i} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                    <View style={styles.legendText}>
+                      <Text style={styles.legendLabel}>{slice.label}</Text>
+                      <Text style={styles.legendPercent}>{slice.percent}%</Text>
+                    </View>
+                    <Text style={styles.legendAmount}>
+                      {preferences.currency}{slice.amount.toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+                {totalPersonalSpent === 0 && (
+                  <Text style={{ fontSize: 12, color: '#6B7280' }}>No personal expenses logged yet.</Text>
+                )}
+              </View>
             </View>
-          </View>
+          </CyberPanel>
 
-          <Text style={styles.sectionTitle}>Personal Cash Flow Analysis</Text>
+          {/* Deep Cash flow metrics */}
+          <Text style={styles.deckTitle}>Audit Intelligence Cards</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.insightsRow}>
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: '#E8F5E9' }]}>
-                <Icon name="trending-up" size={20} color="#2E7D32" />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Icon name="trending-down" size={18} color="#EF4444" />
               </View>
               <Text style={styles.insightValue}>
-                {preferences.currency}
-                {dailySpendRate.toLocaleString()}
+                {preferences.currency}{dailySpendRate.toLocaleString()}
               </Text>
               <Text style={styles.insightLabel}>Daily Spend Rate</Text>
             </View>
 
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: '#FFF3E0' }]}>
-                <Icon name="cart-outline" size={20} color="#E65100" />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(245, 197, 24, 0.1)' }]}>
+                <Icon name="cart-outline" size={18} color="#F5C518" />
               </View>
               <Text style={styles.insightValue}>
-                {preferences.currency}
-                {largestTx ? largestTx.amount.toLocaleString() : 0}
+                {preferences.currency}{largestTx ? largestTx.amount.toLocaleString() : 0}
               </Text>
               <Text style={styles.insightLabel} numberOfLines={1}>
                 Peak: {largestTx ? largestTx.title : 'N/A'}
               </Text>
             </View>
 
-            <View style={styles.insightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: '#E1F5FE' }]}>
-                <Icon name="stats-chart" size={20} color="#0284C7" />
+            <View style={styles.cyberInsightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: 'rgba(52, 211, 153, 0.1)' }]}>
+                <Icon name="stats-chart" size={18} color="#34D399" />
               </View>
               <Text style={styles.insightValue}>
-                {preferences.currency}
-                {totalPersonalSavings.toLocaleString()}
+                {preferences.currency}{totalPersonalSavings.toLocaleString()}
               </Text>
               <Text style={styles.insightLabel}>Net Inflow</Text>
             </View>
@@ -917,16 +1000,16 @@ export const AnalyticsScreen = () => {
       )}
 
       {/* EXPORT OPTIONS SECTION */}
-      <Text style={styles.sectionTitle}>Download Audit Statement</Text>
+      <Text style={styles.deckTitle}>Audit Ledgers & Export Desk</Text>
       <View style={styles.exportContainer}>
-        <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]} onPress={handleExportCSV}>
-          <Icon name="document-text-outline" size={20} color="#2E7D32" />
-          <Text style={[styles.exportBtnText, { color: '#2E7D32' }]}>Export Excel (XLSX)</Text>
+        <TouchableOpacity style={styles.cyberExportBtnExcel} onPress={handleExportCSV}>
+          <Icon name="document-text-outline" size={18} color="#34D399" />
+          <Text style={styles.cyberExportBtnTextExcel}>Export Excel (XLSX)</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.exportBtn, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]} onPress={handleExportPDF}>
-          <Icon name="receipt-outline" size={20} color="#C62828" />
-          <Text style={[styles.exportBtnText, { color: '#C62828' }]}>Export PDF Ledger</Text>
+        <TouchableOpacity style={styles.cyberExportBtnPDF} onPress={handleExportPDF}>
+          <Icon name="receipt-outline" size={18} color="#F87171" />
+          <Text style={styles.cyberExportBtnTextPDF}>Export PDF Statement</Text>
         </TouchableOpacity>
       </View>
 
@@ -937,13 +1020,13 @@ export const AnalyticsScreen = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Custom Date Range</Text>
               <TouchableOpacity onPress={() => setRangeModalVisible(false)}>
-                <Icon name="close" size={24} color={COLORS.text} />
+                <Icon name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
             <View style={{ gap: 16, marginBottom: 24 }}>
-              <Text style={styles.modalSub}>Pick your start and end dates to filter all spending data:</Text>
-              
+              <Text style={styles.modalSub}>Pick start and end dates to filter all charts & ledgers:</Text>
+
               <View style={styles.rangeRow}>
                 <TouchableOpacity style={styles.pickerTrigger} onPress={() => setShowStartPicker(true)}>
                   <Text style={styles.pickerLabel}>Start Date</Text>
@@ -983,17 +1066,17 @@ export const AnalyticsScreen = () => {
             )}
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity 
-                style={[styles.rangeActionBtn, { backgroundColor: COLORS.grayLight, flex: 1 }]}
+              <TouchableOpacity
+                style={[styles.rangeActionBtn, { backgroundColor: '#1A1A2E', flex: 1 }]}
                 onPress={() => {
                   setIsCustomRange(false);
                   setRangeModalVisible(false);
                 }}
               >
-                <Text style={[styles.rangeActionText, { color: COLORS.text }]}>Reset</Text>
+                <Text style={[styles.rangeActionText, { color: '#8B949E' }]}>Reset</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.rangeActionBtn, { backgroundColor: COLORS.primary, flex: 2 }]}
                 onPress={() => {
                   if (startDate > endDate) {
@@ -1019,7 +1102,7 @@ export const AnalyticsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0A0A16', // Deep neon black/navy base background matching the theme
     padding: 20,
     paddingTop: 50,
   },
@@ -1032,31 +1115,43 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.text,
+    color: '#FFFFFF',
+  },
+  calendarBtn: {
+    backgroundColor: '#15152A',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3B296A',
   },
   customRangeIndicator: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFDF4',
+    backgroundColor: '#120F24',
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: '#A78BFA',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   customRangeText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: '700',
+    color: '#A78BFA',
   },
   trackSelector: {
     flexDirection: 'row',
-    backgroundColor: COLORS.grayLight,
+    backgroundColor: '#121226',
     borderRadius: 24,
     padding: 4,
     marginBottom: 20,
     gap: 4,
+    borderWidth: 1,
+    borderColor: '#1C1C35',
   },
   trackBtn: {
     flex: 1,
@@ -1065,27 +1160,29 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   trackBtnActive: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: '#A78BFA', // High-tech active neon tab
   },
   trackBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.gray,
+    color: '#8B949E',
   },
   trackBtnTextActive: {
-    color: COLORS.white,
-    fontWeight: '700',
+    color: '#0A0A16',
+    fontWeight: '800',
   },
   segmentControl: {
     flexDirection: 'row',
-    backgroundColor: COLORS.grayLight,
+    backgroundColor: '#121226',
     borderRadius: 20,
     padding: 4,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#1C1C35',
   },
   segmentActive: {
     flex: 1,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#F5C518',
     borderRadius: 16,
     paddingVertical: 8,
     alignItems: 'center',
@@ -1096,90 +1193,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentTextActive: {
-    color: COLORS.white,
-    fontWeight: '700',
+    color: '#0A0A16',
+    fontWeight: '800',
   },
   segmentText: {
-    color: COLORS.gray,
-    fontWeight: '500',
+    color: '#8B949E',
+    fontWeight: '600',
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginTop: 10,
-    marginBottom: 16,
-  },
-  dropdownText: {
-    color: COLORS.gray,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  overviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cyberCard: {
+    backgroundColor: '#0E0E1F',
+    borderWidth: 1,
+    borderColor: '#1F1F3D',
+    borderRadius: 8,
+    padding: 16,
     marginBottom: 24,
-  },
-  donutContainer: {
-    width: 120,
-    height: 120,
     position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  donutCenter: {
+  // Bounding Corner Box Framing (Sci-Fi control interface matching reference image)
+  corner: {
     position: 'absolute',
-    alignItems: 'center',
+    width: 6,
+    height: 6,
+    borderColor: '#A78BFA',
   },
-  donutAmount: {
+  cornerTL: {
+    top: -1,
+    left: -1,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+  },
+  cornerTR: {
+    top: -1,
+    right: -1,
+    borderTopWidth: 1.5,
+    borderRightWidth: 1.5,
+  },
+  cornerBL: {
+    bottom: -1,
+    left: -1,
+    borderBottomWidth: 1.5,
+    borderLeftWidth: 1.5,
+  },
+  cornerBR: {
+    bottom: -1,
+    right: -1,
+    borderBottomWidth: 1.5,
+    borderRightWidth: 1.5,
+  },
+  panelTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: COLORS.text,
+    color: '#A78BFA',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  donutLabel: {
-    fontSize: 9,
-    color: COLORS.gray,
-  },
-  legendContainer: {
-    flex: 1,
-    marginLeft: 20,
-    gap: 8,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  legendText: {
-    flex: 1,
-  },
-  legendLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  legendPercent: {
-    fontSize: 10,
-    color: COLORS.gray,
-  },
-  legendAmount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  chartMock: {
-    marginBottom: 24,
+  chartWrapper: {
+    marginBottom: 8,
   },
   chartWithYAxis: {
     flexDirection: 'row',
@@ -1193,9 +1263,10 @@ const styles = StyleSheet.create({
   },
   yAxisText: {
     fontSize: 9,
-    color: COLORS.gray,
+    color: '#8B949E',
     textAlign: 'right',
-    paddingRight: 6,
+    paddingRight: 8,
+    fontWeight: '500',
   },
   chartXAxis: {
     flexDirection: 'row',
@@ -1205,201 +1276,206 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   xAxisText: {
+    fontSize: 9,
+    color: '#8B949E',
+    fontWeight: '600',
+  },
+  radarLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  radarGraphic: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radarLegend: {
+    flex: 1,
+    marginLeft: 16,
+    gap: 8,
+  },
+  radarLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  radarLegendLabel: {
     fontSize: 10,
-    color: COLORS.gray,
+    fontWeight: '600',
+    color: '#8B949E',
+    flex: 1,
+  },
+  radarLegendVal: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  donutOverview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  donutContainer: {
+    width: 110,
+    height: 110,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  donutCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  donutAmount: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  donutLabel: {
+    fontSize: 8,
+    color: '#8B949E',
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  legendContainer: {
+    flex: 1,
+    marginLeft: 20,
+    gap: 8,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  legendText: {
+    flex: 1,
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8B949E',
+  },
+  legendPercent: {
+    fontSize: 9,
+    color: '#5C6270',
+    marginTop: 1,
+  },
+  legendAmount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  deckTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 12,
+    marginBottom: 16,
   },
   insightsRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  insightCard: {
-    width: 140,
+  cyberInsightCard: {
+    width: 130,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 16,
+    borderColor: '#1C1C35',
+    borderRadius: 12,
     marginRight: 12,
-    backgroundColor: COLORS.white,
+    backgroundColor: '#0E0E1F',
   },
   insightIcon: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   insightValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: COLORS.text,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   insightLabel: {
-    fontSize: 11,
-    color: COLORS.gray,
+    fontSize: 10,
+    color: '#8B949E',
+    fontWeight: '500',
   },
-  savingsRateCard: {
+  gaugeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 24,
-  },
-  savingsRateText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  savingsRateLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 4,
-  },
-  exportContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 32,
-  },
-  exportBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  exportBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  modalRoot: {
-    flex: 1,
-    backgroundColor: 'rgba(11, 19, 43, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
   },
-  modalTitle: {
+  gaugeGraphic: {
+    position: 'relative',
+    width: 110,
+    height: 110,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gaugeCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  gaugePercent: {
     fontSize: 18,
     fontWeight: '800',
-    color: COLORS.text,
+    color: '#FFFFFF',
   },
-  modalSub: {
-    fontSize: 12,
-    color: COLORS.gray,
+  gaugeLabel: {
+    fontSize: 8,
+    color: '#8B949E',
+    marginTop: 2,
+    textTransform: 'uppercase',
   },
-  rangeRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  pickerTrigger: {
+  gaugeLegend: {
     flex: 1,
-    backgroundColor: COLORS.grayLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    marginLeft: 20,
   },
-  pickerLabel: {
+  gaugeTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.gray,
+    color: '#8B949E',
   },
-  pickerVal: {
+  gaugeStatus: {
     fontSize: 14,
     fontWeight: '800',
-    color: COLORS.text,
-    marginTop: 4,
-  },
-  rangeActionBtn: {
-    paddingVertical: 16,
-    borderRadius: 28,
-    alignItems: 'center',
-  },
-  rangeActionText: {
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  // Savings Goal milestone styles
-  savingsGoalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
-  },
-  progressRingContainer: {
-    position: 'relative',
-    width: 90,
-    height: 90,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressRingCenter: {
-    position: 'absolute',
-  },
-  progressPercent: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  goalText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.gray,
-  },
-  goalStatus: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
     marginVertical: 4,
   },
-  goalDesc: {
-    fontSize: 11,
-    color: COLORS.gray,
+  gaugeDesc: {
+    fontSize: 9,
+    color: '#5C6270',
+    lineHeight: 12,
   },
-  // Waterfall Card styles
-  waterfallCard: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
+  gaugeGoalSub: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#A78BFA',
+    marginTop: 8,
+  },
+  waterfallWrapper: {
+    paddingVertical: 4,
   },
   waterfallTitle: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.gray,
-    marginBottom: 12,
+    color: '#8B949E',
+    marginBottom: 10,
   },
   waterfallBar: {
     flexDirection: 'row',
-    borderRadius: 8,
+    borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 16,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#15152A',
   },
   waterfallLegendRow: {
     flexDirection: 'row',
@@ -1411,8 +1487,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   waterfallLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    color: COLORS.text,
+    color: '#8B949E',
+  },
+  exportContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 40,
+  },
+  cyberExportBtnExcel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'rgba(52, 211, 153, 0.05)',
+    borderColor: '#34D399',
+  },
+  cyberExportBtnPDF: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'rgba(248, 113, 113, 0.05)',
+    borderColor: '#F87171',
+  },
+  cyberExportBtnTextExcel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#34D399',
+  },
+  cyberExportBtnTextPDF: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F87171',
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 10, 22, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#0E0E1F',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderColor: '#1F1F3D',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalSub: {
+    fontSize: 11,
+    color: '#8B949E',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  pickerTrigger: {
+    flex: 1,
+    backgroundColor: '#15152A',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1F1F3D',
+  },
+  pickerLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#8B949E',
+  },
+  pickerVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 4,
+  },
+  rangeActionBtn: {
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  rangeActionText: {
+    fontWeight: '800',
+    fontSize: 14,
   },
 });
