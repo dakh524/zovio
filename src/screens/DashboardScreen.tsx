@@ -9,6 +9,7 @@ import {
   FlatList,
   Alert,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -567,22 +568,28 @@ export const DashboardScreen = () => {
                   <View style={{ flexDirection: 'row', gap: 12, marginTop: 15 }}>
                     <TouchableOpacity
                       style={styles.settleBtn}
-                      onPress={() => {
-                        Alert.alert(
-                          'Settle Transaction',
-                          `Mark ${preferences.currency}${selectedRecord.amount.toLocaleString()} from ${selectedRecord.contactName} as Settled?`,
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Yes, Settle',
-                              onPress: async () => {
-                                await updateMemoryStatus(selectedRecord.id, 'settled');
-                                setDetailVisible(false);
-                                Alert.alert('Success', `✅ Settled with ${selectedRecord.contactName}!`);
+                      onPress={async () => {
+                        if (Platform.OS === 'web') {
+                          await updateMemoryStatus(selectedRecord.id, 'settled');
+                          setDetailVisible(false);
+                          alert(`✅ Settled with ${selectedRecord.contactName}!`);
+                        } else {
+                          Alert.alert(
+                            'Settle Transaction',
+                            `Mark ${preferences.currency}${selectedRecord.amount.toLocaleString()} from ${selectedRecord.contactName} as Settled?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Yes, Settle',
+                                onPress: async () => {
+                                  await updateMemoryStatus(selectedRecord.id, 'settled');
+                                  setDetailVisible(false);
+                                  Alert.alert('Success', `✅ Settled with ${selectedRecord.contactName}!`);
+                                },
                               },
-                            },
-                          ]
-                        );
+                            ]
+                          );
+                        }
                       }}
                     >
                       <Text style={styles.settleBtnText}>Mark Settle</Text>
@@ -598,6 +605,39 @@ export const DashboardScreen = () => {
                     )}
                   </View>
                 )}
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={async () => {
+                    if (Platform.OS === 'web') {
+                      const confirmDelete = window.confirm('Are you sure you want to delete this memory?');
+                      if (confirmDelete) {
+                        await deleteMemory(selectedRecord.id);
+                        setDetailVisible(false);
+                      }
+                    } else {
+                      Alert.alert(
+                        'Delete Record',
+                        'Are you sure you want to delete this memory?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: async () => {
+                              await deleteMemory(selectedRecord.id);
+                              setDetailVisible(false);
+                              Alert.alert('Deleted', 'Record removed successfully.');
+                            },
+                          },
+                        ]
+                      );
+                    }
+                  }}
+                >
+                  <Icon name="trash-outline" size={18} color="#FF5252" />
+                  <Text style={styles.deleteBtnText}>Delete Memory</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -1002,6 +1042,22 @@ const styles = StyleSheet.create({
   },
   detailRemindBtnText: {
     color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FF8A80',
+    backgroundColor: '#FFEBEE',
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 8,
+    marginTop: 12,
+  },
+  deleteBtnText: {
+    color: '#C62828',
     fontWeight: '700',
   },
   financeStatsRow: {

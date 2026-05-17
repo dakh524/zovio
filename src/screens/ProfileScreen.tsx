@@ -288,6 +288,9 @@ export const ProfileScreen = () => {
               <Text style={s.aboutText}>Version: 1.0.0</Text>
               <Text style={s.aboutText}>Developer: Dakh Edu Solutions</Text>
               <Text style={s.aboutText}>Description: Personal Financial Diary</Text>
+              <Text style={[s.aboutText, { color: COLORS.secondary, fontWeight: '700', marginTop: 5 }]}>
+                For issues contact: +91 8667399640
+              </Text>
             </View>
             <TouchableOpacity
               style={s.saveBtn}
