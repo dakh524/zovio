@@ -230,8 +230,17 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const cleanPhone = memory.whatsappNumber.replace(/\D/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     
-    // Formatting: Hey [Contact Name]! 👋 Just a friendly reminder — you owe me ₹[Amount] for [Occasion] on [Date]. Please settle when convenient 😊 — via ZOVIO
-    const message = `Hey ${memory.contactName}! 👋 Just a friendly reminder — you owe me ${preferences.currency}${memory.amount} for ${memory.occasion} on ${memory.date}. Please settle when convenient 😊 — via ZOVIO`;
+    const message = `Hey ${memory.contactName}! 👋
+
+You have a pending payment on ZOVIO:
+
+💰 Amount  : ${preferences.currency}${memory.amount}
+📌 Occasion : ${memory.occasion}
+📅 Date     : ${memory.date}
+
+Please settle when you get a chance 😊
+
+— Sent via ZOVIO`;
     const url = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(message)}`;
 
     Linking.canOpenURL(url)
