@@ -209,14 +209,6 @@ export const Avatar: React.FC<AvatarProps> = ({ type, size = 50, showBackground 
       </View>
     );
   }
-  if (type === 'avatar3') {
-    return (
-      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={require('../../assets/avatar3.png')} style={{ width: size, height: size, borderRadius: size / 2 }} />
-      </View>
-    );
-  }
-  
   if (type.startsWith('http') || type.startsWith('file') || type.startsWith('content')) {
     return (
       <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
@@ -234,7 +226,7 @@ export const Avatar: React.FC<AvatarProps> = ({ type, size = 50, showBackground 
 };
 
 // Helper to get avatar type by index
-export const AVATAR_TYPES: AvatarType[] = ['avatar1', 'avatar2', 'avatar3', 'manGlasses', 'womanBun', 'manBeardBun', 'womanDark', 'womanBob', 'manBeard'];
+export const AVATAR_TYPES: AvatarType[] = ['avatar1', 'avatar2', 'manGlasses', 'womanBun', 'manBeardBun', 'womanDark', 'womanBob', 'manBeard'];
 
 export const getAvatarType = (index: number): AvatarType => {
   return AVATAR_TYPES[index % AVATAR_TYPES.length];

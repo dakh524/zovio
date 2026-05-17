@@ -63,12 +63,12 @@ export const OnboardingScreen = () => {
 
   const getOnboardingAvatar = (idx: number): string => {
     switch (idx) {
-      case 0: return 'avatar3';
+      case 0: return 'avatar1';
       case 1: return 'avatar2';
       case 2: return 'manGlasses';
       case 3: return 'womanBun';
       case 4: return 'manBeardBun';
-      default: return 'avatar3';
+      default: return 'avatar1';
     }
   };
 
