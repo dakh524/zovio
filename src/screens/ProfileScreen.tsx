@@ -102,11 +102,7 @@ export const ProfileScreen = () => {
       {/* Profile Details */}
       <View style={s.ps}>
         <TouchableOpacity style={s.aw} onPress={handlePickImage}>
-          {user.avatar.startsWith('http') || user.avatar.startsWith('file') ? (
-            <Avatar type="manBeard" size={120} /> // Fallback placeholder logic if parsing custom image
-          ) : (
-            <Avatar type={user.avatar as any} size={120} />
-          )}
+          <Avatar type={user.avatar} size={120} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setProfileModalVisible(true)}>
           <Text style={s.nm}>

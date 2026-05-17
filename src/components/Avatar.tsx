@@ -6,7 +6,7 @@ import { COLORS } from '../constants/theme';
 // Navy blue (#0B132B) and white illustration style avatars on yellow background
 // Matching the exact reference image style
 
-type AvatarType = 'manGlasses' | 'womanBun' | 'manBeardBun' | 'womanDark' | 'womanBob' | 'manBeard';
+type AvatarType = 'manGlasses' | 'womanBun' | 'manBeardBun' | 'womanDark' | 'womanBob' | 'manBeard' | 'avatar1' | 'avatar2' | string;
 
 interface AvatarProps {
   type: AvatarType;
@@ -195,7 +195,30 @@ const AVATAR_MAP: Record<AvatarType, React.FC<{s: number}>> = {
 };
 
 export const Avatar: React.FC<AvatarProps> = ({ type, size = 50, showBackground = true }) => {
-  const AvatarComponent = AVATAR_MAP[type];
+  if (type === 'avatar1') {
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Image source={require('../../assets/avatar1.png')} style={{ width: size, height: size, borderRadius: size / 2 }} />
+      </View>
+    );
+  }
+  if (type === 'avatar2') {
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Image source={require('../../assets/avatar2.png')} style={{ width: size, height: size, borderRadius: size / 2 }} />
+      </View>
+    );
+  }
+  
+  if (type.startsWith('http') || type.startsWith('file') || type.startsWith('content')) {
+    return (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Image source={{ uri: type }} style={{ width: size, height: size, borderRadius: size / 2 }} />
+      </View>
+    );
+  }
+
+  const AvatarComponent = AVATAR_MAP[type as any] || AVATAR_MAP['manBeard'];
   return (
     <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
       <AvatarComponent s={size} />
@@ -204,7 +227,7 @@ export const Avatar: React.FC<AvatarProps> = ({ type, size = 50, showBackground 
 };
 
 // Helper to get avatar type by index
-export const AVATAR_TYPES: AvatarType[] = ['manGlasses', 'womanBun', 'manBeardBun', 'womanDark', 'womanBob', 'manBeard'];
+export const AVATAR_TYPES: AvatarType[] = ['avatar1', 'avatar2', 'manGlasses', 'womanBun', 'manBeardBun', 'womanDark', 'womanBob', 'manBeard'];
 
 export const getAvatarType = (index: number): AvatarType => {
   return AVATAR_TYPES[index % AVATAR_TYPES.length];

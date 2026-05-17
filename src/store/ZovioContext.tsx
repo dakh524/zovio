@@ -95,7 +95,7 @@ const FINANCES_KEY = 'zovio_finances';
 export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [notes, setNotes] = useState<Memory[]>([]);
-  const [user, setUser] = useState<UserProfile>({ name: 'Sajibur Rahman', avatar: 'manBeard' });
+  const [user, setUser] = useState<UserProfile>({ name: 'Sajibur Rahman', avatar: 'avatar1' });
   const [preferences, setPreferences] = useState<Preferences>({
     whatsappReminders: true,
     currency: '₹',
