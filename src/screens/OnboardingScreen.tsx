@@ -61,6 +61,17 @@ export const OnboardingScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
+  const getOnboardingAvatar = (idx: number): string => {
+    switch (idx) {
+      case 0: return 'avatar1';
+      case 1: return 'avatar2';
+      case 2: return 'manGlasses';
+      case 3: return 'womanBun';
+      case 4: return 'manBeardBun';
+      default: return 'avatar1';
+    }
+  };
+
   const handleScroll = (event: any) => {
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const index = Math.round(contentOffsetX / width);
@@ -119,7 +130,7 @@ export const OnboardingScreen = () => {
               <Svg height={250} width={250} style={styles.blob} viewBox="0 0 200 200">
                 <Path fill={COLORS.warningSoft} d="M44.7,-76.4C58.9,-69.2,71.8,-59.1,81.1,-46.3C90.4,-33.5,96,-18.1,95.5,-2.9C95,12.3,88.4,27.3,78.2,38.8C68,50.3,54.2,58.3,40.1,65C26,71.7,11.6,77.1,-3.5,82.8C-18.6,88.5,-34.4,94.5,-48.6,90C-62.8,85.5,-75.4,70.5,-83.4,53.8C-91.4,37.1,-94.8,18.7,-91.6,1.8C-88.4,-15.1,-78.6,-30.5,-67.2,-43.2C-55.8,-55.9,-42.8,-65.9,-29.4,-73.8C-16,-81.7,-2.2,-87.5,10.6,-85.4C23.4,-83.3,44.7,-76.4,44.7,-76.4Z" transform="translate(100 100) scale(1.1)" />
               </Svg>
-              <Avatar type={getAvatarType(index)} size={140} />
+              <Avatar type={getOnboardingAvatar(index)} size={140} />
             </View>
 
             <Text style={styles.description}>{item.description}</Text>
