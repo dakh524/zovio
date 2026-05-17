@@ -363,9 +363,11 @@ export const AnalyticsScreen = () => {
     const date = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(date.getFullYear(), date.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
       result.push({
         label: d.toLocaleString('default', { month: 'short' }),
-        key: d.toISOString().substring(0, 7),
+        key: `${year}-${month}`,
       });
     }
     return result;
@@ -919,9 +921,11 @@ export const AnalyticsScreen = () => {
               <View style={styles.chartXAxis}>
                 {scatterTransactions.map((tx, idx) => {
                   const dateObj = parseDateString(tx.date);
+                  const titleStr = (tx as any).title || (tx as any).contactName || 'Tx';
+                  const truncatedTitle = titleStr.length > 5 ? titleStr.substring(0, 5) + '..' : titleStr;
                   return (
                     <Text key={idx} style={[styles.xAxisText, { fontSize: 8 }]}>
-                      {dateObj.getDate()}th
+                      {dateObj.getDate()}th ({truncatedTitle})
                     </Text>
                   );
                 })}
