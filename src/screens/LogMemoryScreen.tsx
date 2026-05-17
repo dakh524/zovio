@@ -393,13 +393,20 @@ export const LogMemoryScreen = () => {
           {selectedContactIndex === null && (
             <View style={s.inputContainer}>
               <Text style={s.il}>Contact Name</Text>
-              <TextInput
-                style={s.textInput}
-                placeholder="Type name manually"
-                placeholderTextColor={COLORS.gray}
-                value={contactName}
-                onChangeText={setContactName}
-              />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {contactName.trim().length > 0 && (
+                  <View style={{ shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 2 }}>
+                    <Avatar type={getAvatarType(contactName.length)} size={48} />
+                  </View>
+                )}
+                <TextInput
+                  style={[s.textInput, { flex: 1 }]}
+                  placeholder="Type name manually"
+                  placeholderTextColor={COLORS.gray}
+                  value={contactName}
+                  onChangeText={setContactName}
+                />
+              </View>
             </View>
           )}
         </>
