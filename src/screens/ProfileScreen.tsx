@@ -196,19 +196,7 @@ export const ProfileScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Export Section (Feature 3 & 4) */}
-      <Text style={s.sectionHeader}>Exports & Reports</Text>
-      <View style={s.exportRow}>
-        <TouchableOpacity style={s.exportBtn} onPress={exportToPDF}>
-          <Icon name="document-text" size={22} color={COLORS.white} />
-          <Text style={s.exportBtnText}>Export PDF</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={[s.exportBtn, { backgroundColor: COLORS.success }]} onPress={exportToExcel}>
-          <Icon name="grid" size={22} color={COLORS.white} />
-          <Text style={s.exportBtnText}>Export Excel</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Secure Cryptographic Backup Section */}
       <Text style={s.sectionHeader}>🔒 Secure Cryptographic Backup</Text>
