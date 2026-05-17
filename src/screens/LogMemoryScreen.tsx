@@ -209,7 +209,11 @@ export const LogMemoryScreen = () => {
         return;
       }
 
-      if (showWhatsapp && whatsappNumber) {
+      if (showWhatsapp) {
+        if (!whatsappNumber || !whatsappNumber.trim()) {
+          Alert.alert('Validation Error', 'Please enter a WhatsApp mobile number to enable reminders.');
+          return;
+        }
         const cleanPhone = whatsappNumber.replace(/\D/g, '');
         if (cleanPhone.length !== 10) {
           Alert.alert('Validation Error', 'Please enter a valid 10-digit Indian WhatsApp number.');

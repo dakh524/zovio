@@ -541,15 +541,16 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const cleanPhone = memory.whatsappNumber.replace(/\D/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     
-    // Structured WhatsApp Message Formatting
+    // Structured WhatsApp Message Formatting (Avoid raw ₹ which renders as ? on older WA instances)
+    const currencyLabel = preferences.currency === '₹' ? 'Rs. ' : preferences.currency;
     const formattedDate = formatWhatsAppDate(memory.date);
     const message = `Hey ${memory.contactName}! 👋
 
-You have a pending payment on ZOVIO:
+Friendly reminder for the pending payment:
 
-💰 Amount   : ${preferences.currency}${memory.amount}
-📌 Occasion : ${memory.occasion}
-📅 Date     : ${formattedDate}
+💰 Amount: ${currencyLabel}${memory.amount}
+📌 Occasion: ${memory.occasion}
+📅 Date: ${formattedDate}
 
 Please settle when you get a chance 😊
 
