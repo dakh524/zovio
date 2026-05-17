@@ -92,122 +92,15 @@ const NOTES_KEY = 'zovio_notes';
 const PREFS_KEY = 'zovio_prefs';
 const FINANCES_KEY = 'zovio_finances';
 
-// Beautiful high-fidelity default mock records for gorgeous initial screen rendering
-const INITIAL_MEMORIES: Memory[] = [
-  {
-    id: 'mem_1',
-    contactName: 'Aarav Sharma',
-    amount: 1500,
-    occasion: 'Dinner',
-    date: '2026-05-10',
-    type: 'gave',
-    status: 'pending',
-    notes: 'Dinner at the rooftop restaurant. Aarav promised to return next week.',
-    whatsappNumber: '9876543210'
-  },
-  {
-    id: 'mem_2',
-    contactName: 'Neha Verma',
-    amount: 2500,
-    occasion: 'Trip',
-    date: '2026-05-02',
-    type: 'gave',
-    status: 'pending',
-    notes: 'Fuel costs split for the weekend road trip.',
-    whatsappNumber: '9988776655'
-  },
-  {
-    id: 'mem_3',
-    contactName: 'Rohan Gupta',
-    amount: 1000,
-    occasion: 'Gift',
-    date: '2026-04-15',
-    type: 'received',
-    status: 'settled',
-    notes: 'Birthday pool money return.'
-  },
-  {
-    id: 'mem_4',
-    contactName: 'Aarav Sharma',
-    amount: 800,
-    occasion: 'Dinner',
-    date: '2026-03-22',
-    type: 'gave',
-    status: 'settled',
-    notes: 'Movie night split.'
-  }
-];
+// Empty lists on initial install so every user starts fresh with zero balance
+const INITIAL_MEMORIES: Memory[] = [];
 
-const INITIAL_FINANCES: FinanceEntry[] = [
-  {
-    id: 'fin_1',
-    title: 'Monthly Salary Credit',
-    amount: 45000,
-    category: 'Salary',
-    type: 'income',
-    date: '2026-05-01',
-    notes: 'Primary monthly credit'
-  },
-  {
-    id: 'fin_2',
-    title: 'House Rent',
-    amount: 12000,
-    category: 'Rent',
-    type: 'expense',
-    date: '2026-05-02',
-    notes: 'Flat monthly rent payment'
-  },
-  {
-    id: 'fin_3',
-    title: 'Grocery Superstore',
-    amount: 3200,
-    category: 'Food',
-    type: 'expense',
-    date: '2026-05-10',
-    notes: 'Stocked pantry for the month'
-  },
-  {
-    id: 'fin_4',
-    title: 'Freelance UI Design Project',
-    amount: 8500,
-    category: 'Freelance',
-    type: 'income',
-    date: '2026-05-15',
-    notes: 'Mobile app consulting layout'
-  },
-  {
-    id: 'fin_5',
-    title: 'Electricity Bill',
-    amount: 1850,
-    category: 'Bills',
-    type: 'expense',
-    date: '2026-05-17',
-    notes: 'AC heavy usage'
-  },
-  {
-    id: 'fin_6',
-    title: 'Weekend Dining Out',
-    amount: 2200,
-    category: 'Food',
-    type: 'expense',
-    date: '2026-05-12',
-    notes: 'Sushi night'
-  },
-  {
-    id: 'fin_7',
-    title: 'Petrol Fill Up',
-    amount: 1500,
-    category: 'Travel',
-    type: 'expense',
-    date: '2026-05-08',
-    notes: 'Full tank reset'
-  }
-];
+const INITIAL_FINANCES: FinanceEntry[] = [];
 
 export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [notes, setNotes] = useState<Memory[]>([]);
-  const [user, setUser] = useState<UserProfile>({ name: 'Sajibur Rahman', avatar: 'avatar1' });
+  const [user, setUser] = useState<UserProfile>({ name: 'User', avatar: 'avatar1' });
   const [preferences, setPreferences] = useState<Preferences>({
     whatsappReminders: true,
     currency: '₹',
