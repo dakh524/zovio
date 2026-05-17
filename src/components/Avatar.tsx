@@ -198,14 +198,14 @@ export const Avatar: React.FC<AvatarProps> = ({ type, size = 50, showBackground 
   if (type === 'avatar1') {
     return (
       <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={require('../../assets/avatar1.png')} style={{ width: size, height: size, borderRadius: size / 2 }} />
+        <Image source={require('../../assets/avatar1.jpg')} style={{ width: size, height: size, borderRadius: size / 2 }} />
       </View>
     );
   }
   if (type === 'avatar2') {
     return (
       <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Image source={require('../../assets/avatar2.png')} style={{ width: size, height: size, borderRadius: size / 2 }} />
+        <Image source={require('../../assets/avatar2.jpg')} style={{ width: size, height: size, borderRadius: size / 2 }} />
       </View>
     );
   }
