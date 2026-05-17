@@ -365,13 +365,13 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Update Status (Settle)
   const updateMemoryStatus = async (id: string, status: 'pending' | 'settled') => {
-    const updated = memories.map((m) => (m.id === id ? { ...m, status } : m));
+    const updated = memories.map((m) => (String(m.id) === String(id) ? { ...m, status } : m));
     await saveMemoriesToStorage(updated);
 
-    const updatedNotes = notes.map((n) => (n.id === id ? { ...n, status } : n));
+    const updatedNotes = notes.map((n) => (String(n.id) === String(id) ? { ...n, status } : n));
     await saveNotesToStorage(updatedNotes);
 
-    const mem = memories.find((m) => m.id === id);
+    const mem = memories.find((m) => String(m.id) === String(id));
     if (mem) {
       await addInAppNotification(
         'Transaction Settled 🎉',
@@ -383,10 +383,10 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Delete Memory
   const deleteMemory = async (id: string) => {
-    const updated = memories.filter((m) => m.id !== id);
+    const updated = memories.filter((m) => String(m.id) !== String(id));
     await saveMemoriesToStorage(updated);
 
-    const updatedNotes = notes.filter((n) => n.id !== id);
+    const updatedNotes = notes.filter((n) => String(n.id) !== String(id));
     await saveNotesToStorage(updatedNotes);
 
     await addInAppNotification(
@@ -398,10 +398,10 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Update Memory
   const updateMemory = async (id: string, entry: Partial<Memory>) => {
-    const updated = memories.map((m) => (m.id === id ? { ...m, ...entry } : m));
+    const updated = memories.map((m) => (String(m.id) === String(id) ? { ...m, ...entry } : m));
     await saveMemoriesToStorage(updated);
 
-    const updatedNotes = notes.map((n) => (n.id === id ? { ...n, ...entry } : n));
+    const updatedNotes = notes.map((n) => (String(n.id) === String(id) ? { ...n, ...entry } : n));
     await saveNotesToStorage(updatedNotes);
   };
 
@@ -447,12 +447,12 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteFinance = async (id: string) => {
-    const updated = finances.filter((f) => f.id !== id);
+    const updated = finances.filter((f) => String(f.id) !== String(id));
     await saveFinancesToStorage(updated);
   };
 
   const updateFinance = async (id: string, entry: Partial<FinanceEntry>) => {
-    const updated = finances.map((f) => (f.id === id ? { ...f, ...entry } : f));
+    const updated = finances.map((f) => (String(f.id) === String(id) ? { ...f, ...entry } : f));
     await saveFinancesToStorage(updated);
   };
 
@@ -558,17 +558,13 @@ Please settle when you get a chance 😊
 
     const url = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(message)}`;
 
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Alert.alert('Error', 'WhatsApp is not installed on this device.');
-        }
-      })
-      .catch(() => {
-        Alert.alert('Error', 'Failed to open WhatsApp.');
+    Linking.openURL(url).catch(() => {
+      // Fallback: If wa.me deep link fails, open in standard web browser WhatsApp send URL
+      const webUrl = `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(message)}`;
+      Linking.openURL(webUrl).catch(() => {
+        Alert.alert('Error', 'Failed to open WhatsApp. Please ensure WhatsApp is installed.');
       });
+    });
   };
 
   // Helper date formatter
