@@ -8,6 +8,7 @@ import {
   Modal,
   FlatList,
   Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -18,7 +19,7 @@ import Svg, { Path } from 'react-native-svg';
 
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences } = useZovio();
+  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences, finances } = useZovio();
 
   // Modal States
   const [historyVisible, setHistoryVisible] = useState(false);
@@ -28,10 +29,26 @@ export const DashboardScreen = () => {
   const [contactHistoryVisible, setContactHistoryVisible] = useState(false);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
 
+  // Search & Filter States (ADD 5)
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'pending' | 'settled' | 'gave' | 'received'>('all');
+  const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
+
   // Dynamic Calculations
   const totalOwed = memories
     .filter((m) => m.type === 'gave' && m.status === 'pending')
     .reduce((sum, m) => sum + m.amount, 0);
+
+  // Monthly Personal Finance calculations (ADD 1)
+  const currentMonthStr = new Date().toISOString().substring(0, 7); // "YYYY-MM"
+  const currentMonthFinances = finances.filter((f) => f.date.startsWith(currentMonthStr));
+  const totalIncome = currentMonthFinances
+    .filter((f) => f.type === 'income')
+    .reduce((sum, f) => sum + f.amount, 0);
+  const totalExpenses = currentMonthFinances
+    .filter((f) => f.type === 'expense')
+    .reduce((sum, f) => sum + f.amount, 0);
+  const totalSavings = totalIncome - totalExpenses;
 
   const pendingThisMonth = memories
     .filter((m) => m.status === 'pending')
@@ -40,6 +57,30 @@ export const DashboardScreen = () => {
   const settledThisMonth = memories
     .filter((m) => m.status === 'settled')
     .reduce((sum, m) => sum + m.amount, 0);
+
+  // Filter & Sort History Records (ADD 5)
+  const filteredMemories = memories
+    .filter((m) => {
+      const matchSearch =
+        m.contactName.toLowerCase().includes(historySearch.toLowerCase()) ||
+        m.occasion.toLowerCase().includes(historySearch.toLowerCase());
+
+      if (!matchSearch) return false;
+
+      if (historyFilter === 'all') return true;
+      if (historyFilter === 'pending') return m.status === 'pending';
+      if (historyFilter === 'settled') return m.status === 'settled';
+      if (historyFilter === 'gave') return m.type === 'gave';
+      if (historyFilter === 'received') return m.type === 'received';
+      return true;
+    })
+    .sort((a, b) => {
+      if (historySort === 'newest') return new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (historySort === 'oldest') return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (historySort === 'highest') return b.amount - a.amount;
+      if (historySort === 'lowest') return a.amount - b.amount;
+      return 0;
+    });
 
   // Get unique contacts
   const uniqueContacts = Array.from(new Set(memories.map((m) => m.contactName))).map(
@@ -90,6 +131,28 @@ export const DashboardScreen = () => {
         </View>
       </View>
 
+      {/* Personal Finance Tracks (ADD 1) */}
+      <View style={styles.financeStatsRow}>
+        <View style={[styles.financeCard, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]}>
+          <Text style={[styles.financeCardLabel, { color: '#2E7D32' }]}>Income</Text>
+          <Text style={[styles.financeCardVal, { color: '#1B5E20' }]}>
+            {preferences.currency}{totalIncome.toLocaleString()}
+          </Text>
+        </View>
+        <View style={[styles.financeCard, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]}>
+          <Text style={[styles.financeCardLabel, { color: '#C62828' }]}>Expenses</Text>
+          <Text style={[styles.financeCardVal, { color: '#B71C1C' }]}>
+            {preferences.currency}{totalExpenses.toLocaleString()}
+          </Text>
+        </View>
+        <View style={[styles.financeCard, { backgroundColor: '#FFFDF4', borderColor: COLORS.primary }]}>
+          <Text style={[styles.financeCardLabel, { color: COLORS.secondary }]}>Savings</Text>
+          <Text style={[styles.financeCardVal, { color: COLORS.secondary }]}>
+            {preferences.currency}{totalSavings.toLocaleString()}
+          </Text>
+        </View>
+      </View>
+
       {/* Balance Card */}
       <View style={styles.balanceCard}>
         <View style={styles.cardHeader}>
@@ -135,8 +198,7 @@ export const DashboardScreen = () => {
               key={contact.name}
               style={[styles.avatarWrapper, { marginLeft: index === 0 ? 0 : -15, zIndex: 10 - index }]}
               onPress={() => {
-                setSelectedContact(contact.name);
-                setContactHistoryVisible(true);
+                navigation.navigate('ContactHistory', { contactName: contact.name });
               }}
             >
               <Avatar type={getAvatarType(contact.avatarIdx)} size={46} />
@@ -245,8 +307,55 @@ export const DashboardScreen = () => {
               </TouchableOpacity>
             </View>
 
+            {/* Search Bar (ADD 5) */}
+            <View style={styles.searchBar}>
+              <Icon name="search-outline" size={18} color={COLORS.gray} />
+              <TextInput
+                placeholder="Search contact or occasion..."
+                value={historySearch}
+                onChangeText={setHistorySearch}
+                style={styles.searchInput}
+                placeholderTextColor={COLORS.gray}
+              />
+            </View>
+
+            {/* Filter Chips (ADD 5) */}
+            <View style={{ marginBottom: 12 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                {(['all', 'pending', 'settled', 'gave', 'received'] as const).map((filter) => (
+                  <TouchableOpacity
+                    key={filter}
+                    onPress={() => setHistoryFilter(filter)}
+                    style={[styles.historyChip, historyFilter === filter && styles.historyChipActive]}
+                  >
+                    <Text style={[styles.historyChipText, historyFilter === filter && styles.historyChipTextActive]}>
+                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Sort selection (ADD 5) */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8, paddingHorizontal: 4 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.gray }}>Sort:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {(['newest', 'oldest', 'highest', 'lowest'] as const).map((sort) => (
+                  <TouchableOpacity
+                    key={sort}
+                    onPress={() => setHistorySort(sort)}
+                    style={[styles.sortChip, historySort === sort && styles.sortChipActive]}
+                  >
+                    <Text style={[styles.sortChipText, historySort === sort && styles.sortChipTextActive]}>
+                      {sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : sort === 'highest' ? 'Highest' : 'Lowest'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             <FlatList
-              data={memories}
+              data={filteredMemories}
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               renderItem={({ item, index }) => (
@@ -380,10 +489,22 @@ export const DashboardScreen = () => {
                   <View style={{ flexDirection: 'row', gap: 12, marginTop: 15 }}>
                     <TouchableOpacity
                       style={styles.settleBtn}
-                      onPress={async () => {
-                        await updateMemoryStatus(selectedRecord.id, 'settled');
-                        setDetailVisible(false);
-                        Alert.alert('Success', 'Transaction Settled! ✅');
+                      onPress={() => {
+                        Alert.alert(
+                          'Settle Transaction',
+                          `Mark ${preferences.currency}${selectedRecord.amount.toLocaleString()} from ${selectedRecord.contactName} as Settled?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Yes, Settle',
+                              onPress: async () => {
+                                await updateMemoryStatus(selectedRecord.id, 'settled');
+                                setDetailVisible(false);
+                                Alert.alert('Success', `✅ Settled with ${selectedRecord.contactName}!`);
+                              },
+                            },
+                          ]
+                        );
                       }}
                     >
                       <Text style={styles.settleBtnText}>Mark Settle</Text>
@@ -803,6 +924,90 @@ const styles = StyleSheet.create({
   },
   detailRemindBtnText: {
     color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  financeStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 20,
+  },
+  financeCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  financeCardLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  financeCardVal: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.text,
+    marginLeft: 8,
+    padding: 0,
+  },
+  historyChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  historyChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  historyChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  historyChipTextActive: {
+    color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  sortChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#FFFDF4',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sortChipActive: {
+    backgroundColor: COLORS.secondary,
+    borderColor: COLORS.secondary,
+  },
+  sortChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  sortChipTextActive: {
+    color: COLORS.white,
     fontWeight: '700',
   },
 });

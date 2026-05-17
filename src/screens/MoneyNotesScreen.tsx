@@ -8,16 +8,24 @@ import {
   Modal,
   Alert,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { useZovio, Memory } from '../store/ZovioContext';
+import { useZovio, Memory, FinanceEntry } from '../store/ZovioContext';
 import { useNavigation } from '@react-navigation/native';
 
 export const MoneyNotesScreen = () => {
   const navigation = useNavigation<any>();
-  const { memories, deleteMemory, preferences } = useZovio();
+  const {
+    memories,
+    deleteMemory,
+    preferences,
+    finances,
+    addFinance,
+    deleteFinance,
+  } = useZovio();
 
   // Selected period toggle
   const [period, setPeriod] = useState<'Day' | 'Week' | 'Month' | 'Year'>('Day');
@@ -25,8 +33,16 @@ export const MoneyNotesScreen = () => {
 
   // Modal State
   const [detailVisible, setDetailVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Memory | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [journalModalVisible, setJournalModalVisible] = useState(false);
+
+  // Quick Finance Entry Modal State (ADD 1)
+  const [financeModalVisible, setFinanceModalVisible] = useState(false);
+  const [finTitle, setFinTitle] = useState('');
+  const [finAmount, setFinAmount] = useState('');
+  const [finType, setFinType] = useState<'income' | 'expense'>('expense');
+  const [finCategory, setFinCategory] = useState('Food');
+  const [finNotes, setFinNotes] = useState('');
 
   // Dynamic Time Helper
   const getPeriodRange = () => {
@@ -36,18 +52,17 @@ export const MoneyNotesScreen = () => {
       targetDate.setDate(today.getDate() + currentShift);
       return {
         label: currentShift === 0 ? 'Today, ' + targetDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : targetDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-        filterFn: (m: Memory) => m.date === targetDate.toISOString().split('T')[0],
+        filterFn: (dateStr: string) => dateStr === targetDate.toISOString().split('T')[0],
       };
     } else if (period === 'Week') {
-      // Filter last 7 days of the offset week
       const start = new Date(today);
       start.setDate(today.getDate() - 7 + currentShift * 7);
       const end = new Date(today);
       end.setDate(today.getDate() + currentShift * 7);
       return {
         label: `${start.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`,
-        filterFn: (m: Memory) => {
-          const d = new Date(m.date);
+        filterFn: (dateStr: string) => {
+          const d = new Date(dateStr);
           return d >= start && d <= end;
         },
       };
@@ -55,8 +70,8 @@ export const MoneyNotesScreen = () => {
       const targetMonth = new Date(today.getFullYear(), today.getMonth() + currentShift, 1);
       return {
         label: targetMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        filterFn: (m: Memory) => {
-          const d = new Date(m.date);
+        filterFn: (dateStr: string) => {
+          const d = new Date(dateStr);
           return d.getMonth() === targetMonth.getMonth() && d.getFullYear() === targetMonth.getFullYear();
         },
       };
@@ -64,17 +79,26 @@ export const MoneyNotesScreen = () => {
       const targetYear = today.getFullYear() + currentShift;
       return {
         label: `Year ${targetYear}`,
-        filterFn: (m: Memory) => new Date(m.date).getFullYear() === targetYear,
+        filterFn: (dateStr: string) => new Date(dateStr).getFullYear() === targetYear,
       };
     }
   };
 
   const periodRange = getPeriodRange();
-  const periodMemories = memories.filter(periodRange.filterFn);
+  
+  // Filter items matching the period
+  const periodMemories = memories.filter((m) => periodRange.filterFn(m.date));
+  const periodFinances = finances.filter((f) => periodRange.filterFn(f.date));
 
-  // Earned / Spent Sums
-  const earned = periodMemories.filter((m) => m.type === 'received').reduce((sum, m) => sum + m.amount, 0);
-  const spent = periodMemories.filter((m) => m.type === 'gave').reduce((sum, m) => sum + m.amount, 0);
+  // Earned / Spent Sums (Combines memories + finances for period)
+  // received = Memory received + Finance income
+  const earned = periodMemories.filter((m) => m.type === 'received').reduce((sum, m) => sum + m.amount, 0) +
+                 periodFinances.filter((f) => f.type === 'income').reduce((sum, f) => sum + f.amount, 0);
+
+  // spent = Memory gave + Finance expense
+  const spent = periodMemories.filter((m) => m.type === 'gave').reduce((sum, m) => sum + m.amount, 0) +
+                periodFinances.filter((f) => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+
   const balance = earned - spent;
 
   // Pie Chart Calculations
@@ -83,11 +107,9 @@ export const MoneyNotesScreen = () => {
   const spentPercentage = total > 0 ? Math.round((spent / total) * 100) : 50;
 
   // Draw Pie Chart dynamically:
-  // circumference = 2 * PI * r = 2 * 3.1415 * 25 = 157
   const r = 25;
   const c = 2 * Math.PI * r;
   const earnedStroke = (earnedPercentage / 100) * c;
-  const spentStroke = c - earnedStroke;
 
   const handleShiftPeriod = (direction: 'back' | 'forward') => {
     if (direction === 'back') {
@@ -100,6 +122,55 @@ export const MoneyNotesScreen = () => {
   const handleQuickAdd = (type: 'gave' | 'received') => {
     navigation.navigate('LogMemory', { type });
   };
+
+  const handleOpenFinanceLog = (type: 'income' | 'expense') => {
+    setFinType(type);
+    setFinCategory(type === 'income' ? 'Salary' : 'Food');
+    setFinTitle('');
+    setFinAmount('');
+    setFinNotes('');
+    setFinanceModalVisible(true);
+  };
+
+  const handleSaveFinance = async () => {
+    if (!finTitle || !finAmount) {
+      Alert.alert('Required Fields', 'Please fill in a title and amount.');
+      return;
+    }
+    const amt = parseFloat(finAmount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid positive number.');
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    await addFinance({
+      title: finTitle,
+      amount: amt,
+      category: finCategory,
+      type: finType,
+      date: todayStr,
+      notes: finNotes || undefined,
+    });
+
+    setFinanceModalVisible(false);
+  };
+
+  // Chronological Daily Journal combining both memories and finances (ADD 1)
+  const mergedJournal = [
+    ...periodMemories.map((m) => ({ ...m, source: 'memory' as const })),
+    ...periodFinances.map((f) => ({
+      id: f.id,
+      contactName: f.title, // Map title to name
+      occasion: f.category, // Map category to occasion
+      amount: f.amount,
+      date: f.date,
+      type: f.type === 'income' ? ('received' as const) : ('gave' as const),
+      status: 'settled' as const,
+      notes: f.notes,
+      source: 'finance' as const,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -133,6 +204,24 @@ export const MoneyNotesScreen = () => {
         <Text style={styles.dateText}>{periodRange.label}</Text>
         <TouchableOpacity onPress={() => handleShiftPeriod('forward')}>
           <Icon name="chevron-forward" size={20} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Quick Entry Shortcuts (ADD 1) */}
+      <View style={styles.quickEntryRow}>
+        <TouchableOpacity
+          style={[styles.quickEntryBtn, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]}
+          onPress={() => handleOpenFinanceLog('income')}
+        >
+          <Icon name="cash-outline" size={18} color="#2E7D32" />
+          <Text style={[styles.quickEntryText, { color: '#2E7D32' }]}>+ Income</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickEntryBtn, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]}
+          onPress={() => handleOpenFinanceLog('expense')}
+        >
+          <Icon name="card-outline" size={18} color="#C62828" />
+          <Text style={[styles.quickEntryText, { color: '#C62828' }]}>- Expense</Text>
         </TouchableOpacity>
       </View>
 
@@ -224,7 +313,41 @@ export const MoneyNotesScreen = () => {
         </View>
       </View>
 
-      {/* Daily Journal List */}
+      {/* Separately grouped personal finance entries (ADD 1) */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Personal Finances</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+        {periodFinances.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.financeMiniCard}
+            onPress={() => {
+              setSelectedItem({ ...item, source: 'finance' });
+              setDetailVisible(true);
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.finMiniTitle} numberOfLines={1}>{item.title}</Text>
+              <View style={[styles.miniBadge, item.type === 'income' ? styles.badgeInc : styles.badgeExp]}>
+                <Text style={styles.badgeText}>{item.type.toUpperCase()}</Text>
+              </View>
+            </View>
+            <Text style={[styles.finMiniAmt, { color: item.type === 'income' ? COLORS.success : '#EF4444' }]}>
+              {preferences.currency}
+              {item.amount.toLocaleString()}
+            </Text>
+            <Text style={styles.finMiniCat}>{item.category}</Text>
+          </TouchableOpacity>
+        ))}
+        {periodFinances.length === 0 && (
+          <View style={[styles.financeMiniCard, { width: 220, justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={{ fontSize: 12, color: COLORS.gray }}>No personal entries this period.</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Daily Journal List (Combines both memories and finances) (ADD 1) */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Daily Journal</Text>
         <TouchableOpacity onPress={() => setJournalModalVisible(true)}>
@@ -232,7 +355,7 @@ export const MoneyNotesScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {periodMemories.slice(0, 5).map((item, index) => (
+      {mergedJournal.slice(0, 5).map((item) => (
         <TouchableOpacity
           key={item.id}
           style={styles.journalRow}
@@ -241,7 +364,14 @@ export const MoneyNotesScreen = () => {
             setDetailVisible(true);
           }}
         >
-          <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon 
+              name={item.source === 'finance' ? 'cash-outline' : 'people-outline'} 
+              size={14} 
+              color={COLORS.gray} 
+            />
+            <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
+          </View>
           <View style={styles.journalRight}>
             <Text style={styles.journalAmount}>
               {preferences.currency}
@@ -256,7 +386,7 @@ export const MoneyNotesScreen = () => {
         </TouchableOpacity>
       ))}
 
-      {periodMemories.length === 0 && (
+      {mergedJournal.length === 0 && (
         <Text style={{ textAlign: 'center', marginTop: 15, color: COLORS.gray }}>
           No records logged for this period.
         </Text>
@@ -276,8 +406,14 @@ export const MoneyNotesScreen = () => {
             {selectedItem && (
               <View style={{ gap: 15 }}>
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Contact Name</Text>
-                  <Text style={styles.detailValue}>{selectedItem.contactName}</Text>
+                  <Text style={styles.detailLabel}>
+                    {selectedItem.source === 'finance' ? 'Title' : 'Contact Name'}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {selectedItem.source === 'finance' 
+                      ? (selectedItem as FinanceEntry).title 
+                      : (selectedItem as Memory).contactName}
+                  </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Type</Text>
@@ -293,8 +429,14 @@ export const MoneyNotesScreen = () => {
                   </Text>
                 </View>
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Occasion</Text>
-                  <Text style={styles.detailValue}>{selectedItem.occasion}</Text>
+                  <Text style={styles.detailLabel}>
+                    {selectedItem.source === 'finance' ? 'Category' : 'Occasion'}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {selectedItem.source === 'finance' 
+                      ? (selectedItem as FinanceEntry).category 
+                      : (selectedItem as Memory).occasion}
+                  </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Date</Text>
@@ -312,16 +454,20 @@ export const MoneyNotesScreen = () => {
                   onPress={() => {
                     Alert.alert(
                       'Delete Record',
-                      'Are you sure you want to delete this memory?',
+                      `Are you sure you want to delete this ${selectedItem.source === 'finance' ? 'finance entry' : 'memory'}?`,
                       [
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Delete',
                           style: 'destructive',
                           onPress: async () => {
-                            await deleteMemory(selectedItem.id);
+                            if (selectedItem.source === 'finance') {
+                              await deleteFinance(selectedItem.id);
+                            } else {
+                              await deleteMemory(selectedItem.id);
+                            }
                             setDetailVisible(false);
-                            Alert.alert('Success', 'Memory Deleted! 🗑️');
+                            Alert.alert('Success', 'Record Deleted! 🗑️');
                           },
                         },
                       ]
@@ -329,7 +475,7 @@ export const MoneyNotesScreen = () => {
                   }}
                 >
                   <Icon name="trash-outline" size={18} color={COLORS.white} />
-                  <Text style={styles.deleteBtnText}>Delete Memory</Text>
+                  <Text style={styles.deleteBtnText}>Delete Record</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -349,7 +495,7 @@ export const MoneyNotesScreen = () => {
             </View>
 
             <FlatList
-              data={periodMemories}
+              data={mergedJournal}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -359,7 +505,14 @@ export const MoneyNotesScreen = () => {
                     setDetailVisible(true);
                   }}
                 >
-                  <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon 
+                      name={item.source === 'finance' ? 'cash-outline' : 'people-outline'} 
+                      size={14} 
+                      color={COLORS.gray} 
+                    />
+                    <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
+                  </View>
                   <View style={styles.journalRight}>
                     <Text style={styles.journalAmount}>
                       {preferences.currency}
@@ -374,6 +527,114 @@ export const MoneyNotesScreen = () => {
                 </TouchableOpacity>
               )}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: Quick Personal Finance Entry (ADD 1) */}
+      <Modal visible={financeModalVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Quick Personal Finance</Text>
+              <TouchableOpacity onPress={() => setFinanceModalVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
+              {/* Type Switch */}
+              <View style={styles.typeSelectorRow}>
+                <TouchableOpacity
+                  style={[styles.typeBtn, finType === 'income' && styles.typeBtnActiveInc]}
+                  onPress={() => {
+                    setFinType('income');
+                    setFinCategory('Salary');
+                  }}
+                >
+                  <Text style={[styles.typeBtnText, finType === 'income' && styles.typeBtnTextActive]}>
+                    Income
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeBtn, finType === 'expense' && styles.typeBtnActiveExp]}
+                  onPress={() => {
+                    setFinType('expense');
+                    setFinCategory('Food');
+                  }}
+                >
+                  <Text style={[styles.typeBtnText, finType === 'expense' && styles.typeBtnTextActive]}>
+                    Expense
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Title Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Title / Source</Text>
+                <TextInput
+                  placeholder={finType === 'income' ? 'e.g. Monthly Salary, Freelance project' : 'e.g. Electricity bill, Food shopping'}
+                  value={finTitle}
+                  onChangeText={setFinTitle}
+                  style={styles.inputField}
+                  placeholderTextColor={COLORS.gray}
+                />
+              </View>
+
+              {/* Amount Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Amount ({preferences.currency})</Text>
+                <TextInput
+                  placeholder="e.g. 500"
+                  value={finAmount}
+                  onChangeText={setFinAmount}
+                  keyboardType="numeric"
+                  style={styles.inputField}
+                  placeholderTextColor={COLORS.gray}
+                />
+              </View>
+
+              {/* Category picker */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {(finType === 'income' 
+                    ? ['Salary', 'Freelance', 'Business', 'Other'] 
+                    : ['Rent', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Other']
+                  ).map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() => setFinCategory(cat)}
+                      style={[styles.catChip, finCategory === cat && styles.catChipActive]}
+                    >
+                      <Text style={[styles.catChipText, finCategory === cat && styles.catChipTextActive]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Notes */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                <TextInput
+                  placeholder="Additional details..."
+                  value={finNotes}
+                  onChangeText={setFinNotes}
+                  style={styles.inputField}
+                  placeholderTextColor={COLORS.gray}
+                />
+              </View>
+
+              {/* Action Button */}
+              <TouchableOpacity
+                style={styles.saveFinBtn}
+                onPress={handleSaveFinance}
+              >
+                <Text style={styles.saveFinBtnText}>Add Entry to Finance Book</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -439,6 +700,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  quickEntryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  quickEntryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  quickEntryText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   summaryCard: {
     backgroundColor: COLORS.white,
@@ -537,6 +817,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
   },
+  financeMiniCard: {
+    width: 150,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  finMiniTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+  },
+  miniBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeInc: {
+    backgroundColor: COLORS.successSoft,
+  },
+  badgeExp: {
+    backgroundColor: COLORS.warningSoft,
+  },
+  badgeText: {
+    fontSize: 6,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  finMiniAmt: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  finMiniCat: {
+    fontSize: 10,
+    color: COLORS.gray,
+    marginTop: 4,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -544,8 +865,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: COLORS.text,
   },
   viewAll: {
@@ -653,5 +974,83 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  typeBtnActiveInc: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#A5D6A7',
+  },
+  typeBtnActiveExp: {
+    backgroundColor: '#FFEBEE',
+    borderColor: '#FFCDD2',
+  },
+  typeBtnText: {
+    fontWeight: '700',
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  typeBtnTextActive: {
+    color: COLORS.secondary,
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gray,
+  },
+  inputField: {
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  catChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.grayLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  catChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  catChipTextActive: {
+    color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  saveFinBtn: {
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 16,
+    borderRadius: 28,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  saveFinBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

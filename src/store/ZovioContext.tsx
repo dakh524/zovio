@@ -33,11 +33,22 @@ export interface Preferences {
   reminderTime: string; // HH:MM format
 }
 
+export interface FinanceEntry {
+  id: string;
+  title: string;
+  amount: number;
+  category: string;
+  type: 'income' | 'expense';
+  date: string; // YYYY-MM-DD
+  notes?: string;
+}
+
 interface ZovioContextType {
   memories: Memory[];
   user: UserProfile;
   notes: Memory[]; // Maps zovio_notes/journal
   preferences: Preferences;
+  finances: FinanceEntry[];
   isLoading: boolean;
   addMemory: (memory: Omit<Memory, 'id'>) => Promise<void>;
   updateMemoryStatus: (id: string, status: 'pending' | 'settled') => Promise<void>;
@@ -48,6 +59,9 @@ interface ZovioContextType {
   exportToExcel: () => Promise<void>;
   triggerWhatsAppReminder: (memory: Memory) => void;
   syncWithSupabase: () => Promise<void>;
+  addFinance: (entry: Omit<FinanceEntry, 'id'>) => Promise<void>;
+  deleteFinance: (id: string) => Promise<void>;
+  updateFinance: (id: string, entry: Partial<FinanceEntry>) => Promise<void>;
 }
 
 const ZovioContext = createContext<ZovioContextType | undefined>(undefined);
@@ -57,6 +71,7 @@ const MEMORIES_KEY = 'zovio_memories';
 const USER_KEY = 'zovio_user';
 const NOTES_KEY = 'zovio_notes';
 const PREFS_KEY = 'zovio_prefs';
+const FINANCES_KEY = 'zovio_finances';
 
 export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -68,6 +83,7 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     dailyNotifications: false,
     reminderTime: '09:00',
   });
+  const [finances, setFinances] = useState<FinanceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load all initial data from AsyncStorage
@@ -78,11 +94,13 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const storedUser = await AsyncStorage.getItem(USER_KEY);
         const storedNotes = await AsyncStorage.getItem(NOTES_KEY);
         const storedPrefs = await AsyncStorage.getItem(PREFS_KEY);
+        const storedFinances = await AsyncStorage.getItem(FINANCES_KEY);
 
         if (storedMemories) setMemories(JSON.parse(storedMemories));
         if (storedUser) setUser(JSON.parse(storedUser));
         if (storedNotes) setNotes(JSON.parse(storedNotes));
         if (storedPrefs) setPreferences(JSON.parse(storedPrefs));
+        if (storedFinances) setFinances(JSON.parse(storedFinances));
       } catch (e) {
         console.error('Failed to load data from storage', e);
       } finally {
@@ -111,6 +129,7 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const saveMemoriesToStorage = async (data: Memory[]) => {
     await AsyncStorage.setItem(MEMORIES_KEY, JSON.stringify(data));
     setMemories(data);
+    await scheduleDailyReminder(data, preferences);
     // Silent background sync
     syncWithSupabase();
   };
@@ -120,11 +139,16 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setNotes(data);
   };
 
+  const saveFinancesToStorage = async (data: FinanceEntry[]) => {
+    await AsyncStorage.setItem(FINANCES_KEY, JSON.stringify(data));
+    setFinances(data);
+    // Silent background sync
+    syncWithSupabase();
+  };
+
   // Supabase background sync (Silently fails/handles offline)
   const syncWithSupabase = async () => {
     try {
-      // Background sync simulation (never blocks UI or alerts user of failures)
-      // Attempting mock/real fetch if internet is present
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
 
@@ -135,7 +159,6 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       clearTimeout(id);
       console.log('Background sync check complete. Online: ', response.ok);
     } catch (e) {
-      // Silently catch the error (offline first - no UX interruption)
       console.log('App is offline or sync failed, keeping data safe in AsyncStorage.');
     }
   };
@@ -189,38 +212,85 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedPrefs = { ...preferences, ...prefs };
     await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(updatedPrefs));
     setPreferences(updatedPrefs);
+    await scheduleDailyReminder(memories, updatedPrefs);
+  };
 
-    // Schedule / cancel notifications based on dailyNotifications state
+  // Personal Finance State Management (ADD 1)
+  const addFinance = async (entry: Omit<FinanceEntry, 'id'>) => {
+    const financeItem: FinanceEntry = {
+      ...entry,
+      id: 'fin_' + Date.now().toString(),
+    };
+    const updated = [financeItem, ...finances];
+    await saveFinancesToStorage(updated);
+    Alert.alert('Success', 'Personal Finance Entry Logged! 💰');
+  };
+
+  const deleteFinance = async (id: string) => {
+    const updated = finances.filter((f) => f.id !== id);
+    await saveFinancesToStorage(updated);
+  };
+
+  const updateFinance = async (id: string, entry: Partial<FinanceEntry>) => {
+    const updated = finances.map((f) => (f.id === id ? { ...f, ...entry } : f));
+    await saveFinancesToStorage(updated);
+  };
+
+  // Notification scheduler helper (ADD 7)
+  const scheduleDailyReminder = async (currentMemories: Memory[], currentPrefs: Preferences) => {
     if (Platform.OS !== 'web') {
-      if (updatedPrefs.dailyNotifications) {
-        // Request Permission
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status !== 'granted') {
-          await Notifications.requestPermissionsAsync();
-        }
+      if (currentPrefs.dailyNotifications) {
+        try {
+          const { status } = await Notifications.getPermissionsAsync();
+          if (status !== 'granted') {
+            await Notifications.requestPermissionsAsync();
+          }
 
-        // Schedule Daily Notification
-        await Notifications.cancelAllScheduledNotificationsAsync();
-        const [hours, minutes] = updatedPrefs.reminderTime.split(':').map(Number);
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'ZOVIO Financial Diary',
-            body: "Don't forget to track your money memories today! 💰",
-            sound: true,
-          },
-          trigger: {
-            hour: hours,
-            minute: minutes,
-            repeats: true,
-          } as any,
-        });
+          await Notifications.cancelAllScheduledNotificationsAsync();
+          const [hours, minutes] = currentPrefs.reminderTime.split(':').map(Number);
+          
+          // Calculate pending dues & count dynamically
+          const pendingRecords = currentMemories.filter((m) => m.status === 'pending');
+          const totalPending = pendingRecords.reduce((sum, m) => sum + m.amount, 0);
+          const count = new Set(pendingRecords.map((m) => m.contactName)).size;
+
+          if (totalPending > 0) {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'ZOVIO Reminder 💰',
+                body: `You have ${currentPrefs.currency}${totalPending} pending from ${count} people`,
+                sound: true,
+              },
+              trigger: {
+                hour: hours,
+                minute: minutes,
+                repeats: true,
+              } as any,
+            });
+          }
+        } catch (e) {
+          console.log('Failed to schedule daily notifications: ', e);
+        }
       } else {
         await Notifications.cancelAllScheduledNotificationsAsync();
       }
     }
   };
 
-  // Trigger Deep Link WhatsApp Reminder
+  // Helper date formatter: formats '2026-05-17' to '17 May 2026'
+  const formatWhatsAppDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const dateParts = dateStr.split('-');
+    if (dateParts.length !== 3) return dateStr;
+    const year = dateParts[0];
+    const monthIndex = parseInt(dateParts[1], 10) - 1;
+    const day = parseInt(dateParts[2], 10);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[monthIndex] || dateParts[1];
+    return `${day} ${month} ${year}`;
+  };
+
+  // Trigger Deep Link WhatsApp Reminder (ADD 2)
   const triggerWhatsAppReminder = (memory: Memory) => {
     if (!memory.whatsappNumber) {
       Alert.alert('No Number', 'Please save a WhatsApp number first.');
@@ -230,17 +300,20 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const cleanPhone = memory.whatsappNumber.replace(/\D/g, '');
     const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     
+    // Structured WhatsApp Message Formatting
+    const formattedDate = formatWhatsAppDate(memory.date);
     const message = `Hey ${memory.contactName}! 👋
 
 You have a pending payment on ZOVIO:
 
-💰 Amount  : ${preferences.currency}${memory.amount}
+💰 Amount   : ${preferences.currency}${memory.amount}
 📌 Occasion : ${memory.occasion}
-📅 Date     : ${memory.date}
+📅 Date     : ${formattedDate}
 
 Please settle when you get a chance 😊
 
 — Sent via ZOVIO`;
+
     const url = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(message)}`;
 
     Linking.canOpenURL(url)
@@ -265,7 +338,7 @@ Please settle when you get a chance 😊
     return `${dd}-${mm}-${yyyy}`;
   };
 
-  // Export as PDF (Feature 3)
+  // Export as PDF
   const exportToPDF = async () => {
     try {
       const dateStr = getFormattedDate();
@@ -376,7 +449,7 @@ Please settle when you get a chance 😊
     }
   };
 
-  // Export as Excel (Feature 4)
+  // Export as Excel
   const exportToExcel = async () => {
     try {
       const dateStr = getFormattedDate();
@@ -456,6 +529,7 @@ Please settle when you get a chance 😊
         user,
         notes,
         preferences,
+        finances,
         isLoading,
         addMemory,
         updateMemoryStatus,
@@ -466,6 +540,9 @@ Please settle when you get a chance 😊
         exportToExcel,
         triggerWhatsAppReminder,
         syncWithSupabase,
+        addFinance,
+        deleteFinance,
+        updateFinance,
       }}
     >
       {children}

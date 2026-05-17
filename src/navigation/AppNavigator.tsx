@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { TabNavigator } from './TabNavigator';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { ProjectScreen } from '../screens/ProjectScreen';
+import { ContactHistoryScreen } from '../screens/ContactHistoryScreen';
 import { storage } from '../store/storage';
 import { View, ActivityIndicator } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -37,6 +38,7 @@ export const AppNavigator = () => {
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="MainTabs" component={TabNavigator} />
       <Stack.Screen name="Project" component={ProjectScreen} />
+      <Stack.Screen name="ContactHistory" component={ContactHistoryScreen} />
     </Stack.Navigator>
   );
 };

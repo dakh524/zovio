@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LENDING_KEY = '@zovio_lending_records';
 const EXPENSES_KEY = '@zovio_expenses';
-const ONBOARDING_KEY = '@zovio_onboarding';
+const ONBOARDING_KEY = 'zovio_onboarding_complete';
 
 export interface LendingRecord {
   id: string;
