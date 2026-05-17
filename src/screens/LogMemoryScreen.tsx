@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
@@ -18,6 +19,7 @@ import { Avatar, getAvatarType } from '../components/Avatar';
 import { useZovio, Memory } from '../store/ZovioContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Contacts from 'expo-contacts';
 
 export const LogMemoryScreen = () => {
   const navigation = useNavigation<any>();
@@ -52,6 +54,78 @@ export const LogMemoryScreen = () => {
 
   // Modal States
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
+
+  // Device Contacts State (ADD - Pick Mobile Contacts)
+  const [deviceContacts, setDeviceContacts] = useState<{ id: string; name: string; phoneNumber?: string }[]>([]);
+  const [deviceContactsSearch, setDeviceContactsSearch] = useState('');
+  const [deviceContactsModalVisible, setDeviceContactsModalVisible] = useState(false);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+
+  const loadDeviceContacts = async () => {
+    setLoadingContacts(true);
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status === 'granted') {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers],
+        });
+
+        if (data && data.length > 0) {
+          const mapped = data
+            .filter((c) => c.name && c.phoneNumbers && c.phoneNumbers.length > 0)
+            .map((c) => {
+              const rawPhone = c.phoneNumbers?.[0]?.number || '';
+              // Format clean 10-digit number
+              const cleanPhone = rawPhone.replace(/\D/g, '');
+              const formattedPhone = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+              return {
+                id: c.id || Math.random().toString(),
+                name: c.name,
+                phoneNumber: formattedPhone,
+              };
+            })
+            // Sort contacts alphabetically
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          setDeviceContacts(mapped);
+          setDeviceContactsModalVisible(true);
+        } else {
+          Alert.alert('No Contacts', 'No contacts found on your device.');
+        }
+      } else {
+        Alert.alert(
+          'Permission Denied',
+          'Please allow ZOVIO to access your contacts in your device settings.'
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to retrieve device contacts.');
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const filteredDeviceContacts = deviceContacts.filter(
+    (c) =>
+      c.name.toLowerCase().includes(deviceContactsSearch.toLowerCase()) ||
+      (c.phoneNumber && c.phoneNumber.includes(deviceContactsSearch))
+  );
+
+  const handleSelectDeviceContact = (item: { name: string; phoneNumber?: string }) => {
+    setContactName(item.name);
+    if (item.phoneNumber) {
+      setWhatsappNumber(item.phoneNumber);
+      setShowWhatsapp(true);
+    } else {
+      setWhatsappNumber('');
+      setShowWhatsapp(false);
+    }
+    setSelectedContactIndex(null);
+    setDeviceContactsModalVisible(false);
+    setDeviceContactsSearch('');
+  };
 
   // Edit presets
   const editMemoryId = route.params?.editMemoryId;
@@ -297,6 +371,21 @@ export const LogMemoryScreen = () => {
                 <Icon name="add" size={24} color={COLORS.primary} />
               </View>
               <Text style={s.pn}>New</Text>
+            </TouchableOpacity>
+
+            {/* Pick from Device Contacts Option (ADD - Auto Pick Contacts) */}
+            <TouchableOpacity
+              style={s.pi}
+              onPress={loadDeviceContacts}
+            >
+              <View style={[s.ac, s.deviceContactBtn]}>
+                {loadingContacts ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <Icon name="people" size={22} color={COLORS.success} />
+                )}
+              </View>
+              <Text style={s.pn}>Import</Text>
             </TouchableOpacity>
           </ScrollView>
 
@@ -548,6 +637,65 @@ export const LogMemoryScreen = () => {
         </View>
       </Modal>
 
+      {/* Modal: Pick Native Device Contacts (ADD - Auto Pick Contacts) */}
+      <Modal visible={deviceContactsModalVisible} animationType="slide" transparent>
+        <View style={s.modalRoot}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Device Contacts</Text>
+              <TouchableOpacity onPress={() => setDeviceContactsModalVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar for Device Contacts */}
+            <View style={s.deviceSearchContainer}>
+              <Icon name="search-outline" size={18} color={COLORS.gray} />
+              <TextInput
+                placeholder="Search phone contacts..."
+                value={deviceContactsSearch}
+                onChangeText={setDeviceContactsSearch}
+                style={s.deviceSearchInput}
+                placeholderTextColor={COLORS.gray}
+              />
+              {deviceContactsSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setDeviceContactsSearch('')}>
+                  <Icon name="close-circle" size={18} color={COLORS.gray} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <FlatList
+              data={filteredDeviceContacts}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <Text style={{ textAlign: 'center', marginTop: 20, color: COLORS.gray }}>
+                  No matching phone contacts.
+                </Text>
+              }
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={s.contactRow}
+                  onPress={() => handleSelectDeviceContact(item)}
+                >
+                  <Avatar type={getAvatarType(index % 6)} size={40} />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text style={s.rn}>{item.name}</Text>
+                    {item.phoneNumber ? (
+                      <Text style={s.rt}>📞 {item.phoneNumber}</Text>
+                    ) : (
+                      <Text style={s.rt}>No number</Text>
+                    )}
+                  </View>
+                  <Icon name="chevron-forward" size={18} color={COLORS.gray} />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -713,4 +861,25 @@ const s = StyleSheet.create({
   },
   rn: { fontSize: 14, fontWeight: '600', color: COLORS.text },
   rt: { fontSize: 12, color: COLORS.gray, marginTop: 2 },
+  deviceContactBtn: {
+    backgroundColor: '#E8F5E9',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  deviceSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 48,
+    marginBottom: 16,
+    gap: 8,
+  },
+  deviceSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.text,
+  },
 });
