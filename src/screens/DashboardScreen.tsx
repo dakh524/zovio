@@ -1,87 +1,168 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  FlatList,
+  Alert,
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { Avatar, getAvatarType } from '../components/Avatar';
-
-const RECORDS = [
-  {name: 'Rimi Sharma', type: 'Dinner', amount: '₹750.00', status: 'Pending', avatarIdx: 1},
-  {name: 'Zachary D.', type: 'Trip', amount: '-₹1,250.00', status: 'Pending', avatarIdx: 0},
-  {name: 'Anne Joseph', type: 'Birthday', amount: '₹500.00', status: 'Settled', avatarIdx: 4},
-  {name: 'Noah Wilson', type: 'Movie', amount: '₹350.00', status: 'Settled', avatarIdx: 5},
-  {name: 'Lucas Martin', type: 'Loan', amount: '-₹2,000.00', status: 'Pending', avatarIdx: 2},
-];
+import { useZovio, Memory } from '../store/ZovioContext';
+import { useNavigation } from '@react-navigation/native';
+import Svg, { Path } from 'react-native-svg';
 
 export const DashboardScreen = () => {
+  const navigation = useNavigation<any>();
+  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences } = useZovio();
+
+  // Modal States
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [remindVisible, setRemindVisible] = useState(false);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<Memory | null>(null);
+  const [contactHistoryVisible, setContactHistoryVisible] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<string | null>(null);
+
+  // Dynamic Calculations
+  const totalOwed = memories
+    .filter((m) => m.type === 'gave' && m.status === 'pending')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  const pendingThisMonth = memories
+    .filter((m) => m.status === 'pending')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  const settledThisMonth = memories
+    .filter((m) => m.status === 'settled')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  // Get unique contacts
+  const uniqueContacts = Array.from(new Set(memories.map((m) => m.contactName))).map(
+    (name) => {
+      const record = memories.find((m) => m.contactName === name);
+      return {
+        name,
+        avatarIdx: record ? memories.indexOf(record) % 6 : 0,
+      };
+    }
+  );
+
+  // Top 5 records for display
+  const latestRecords = memories.slice(0, 5);
+
+  // Sparkline generator (Last 7 days trend of pending transactions)
+  const renderSparkline = () => {
+    // Generate mock sparkline path based on real transaction count/values
+    const points = memories.slice(0, 7).map((m, i) => ({
+      x: i * 20,
+      y: 40 - Math.min(30, (m.amount / 500) * 5),
+    }));
+
+    if (points.length < 2) {
+      return <Path d="M0,25 L100,25" stroke={COLORS.primary} strokeWidth="2" fill="none" />;
+    }
+
+    const pathData = points.reduce(
+      (path, pt, i) => (i === 0 ? `M${pt.x},${pt.y}` : `${path} L${pt.x},${pt.y}`),
+      ''
+    );
+
+    return <Path d={pathData} stroke={COLORS.primary} strokeWidth="2" fill="none" />;
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>ZOVIO</Text>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Profile')}>
             <Icon name="settings-outline" size={20} color={COLORS.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Profile')}>
             <Icon name="notifications-outline" size={20} color={COLORS.text} />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Balance Card */}
       <View style={styles.balanceCard}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Total Owed to You</Text>
           <Icon name="eye-outline" size={16} color="rgba(255,255,255,0.7)" />
         </View>
-        <Text style={styles.balance}>₹29,890<Text style={styles.balanceDecimal}>.00</Text></Text>
+        <Text style={styles.balance}>
+          {preferences.currency}
+          {totalOwed.toLocaleString()}
+          <Text style={styles.balanceDecimal}>.00</Text>
+        </Text>
 
+        {/* Action Buttons */}
         <View style={styles.actionRow}>
           {[
-            {icon: 'arrow-up', label: 'Gave'},
-            {icon: 'arrow-down', label: 'Received'},
-            {icon: 'paper-plane', label: 'Remind'},
-            {icon: 'time', label: 'History'},
+            { icon: 'arrow-up', label: 'Gave', action: () => navigation.navigate('LogMemory', { type: 'gave' }) },
+            { icon: 'arrow-down', label: 'Received', action: () => navigation.navigate('LogMemory', { type: 'received' }) },
+            { icon: 'paper-plane', label: 'Remind', action: () => setRemindVisible(true) },
+            { icon: 'time', label: 'History', action: () => setHistoryVisible(true) },
           ].map((item) => (
-            <View key={item.label} style={styles.actionItem}>
+            <TouchableOpacity key={item.label} style={styles.actionItem} onPress={item.action}>
               <View style={styles.actionBtn}>
                 <Icon name={item.icon as any} size={18} color={COLORS.text} />
               </View>
               <Text style={styles.actionText}>{item.label}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </View>
 
+      {/* Money Memories Section */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Money Memories</Text>
-        <Text style={styles.viewAll}>View all</Text>
+        <TouchableOpacity onPress={() => setHistoryVisible(true)}>
+          <Text style={styles.viewAll}>View all</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.memoriesRow}>
         <View style={styles.avatarStack}>
-          {['Rimi','Zachary','Anne','Noah','Lucas'].map((name, index) => (
-            <View key={name} style={[styles.avatarWrapper, { marginLeft: index === 0 ? 0 : -15, zIndex: 10 - index }]}>
-              <Avatar type={getAvatarType(index)} size={46} />
-            </View>
+          {uniqueContacts.slice(0, 5).map((contact, index) => (
+            <TouchableOpacity
+              key={contact.name}
+              style={[styles.avatarWrapper, { marginLeft: index === 0 ? 0 : -15, zIndex: 10 - index }]}
+              onPress={() => {
+                setSelectedContact(contact.name);
+                setContactHistoryVisible(true);
+              }}
+            >
+              <Avatar type={getAvatarType(contact.avatarIdx)} size={46} />
+            </TouchableOpacity>
           ))}
-          <TouchableOpacity style={[styles.addBtn, { marginLeft: -15, zIndex: 0 }]}>
+          <TouchableOpacity
+            style={[styles.addBtn, { marginLeft: -15, zIndex: 0 }]}
+            onPress={() => navigation.navigate('LogMemory')}
+          >
             <Icon name="add" size={20} color={COLORS.secondary} />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Stats Cards */}
       <View style={styles.statsRow}>
         <View style={[styles.smallCard, styles.pendingCard]}>
           <View style={styles.smallCardHeader}>
             <Text style={styles.pendingText}>Pending</Text>
             <Icon name="information-circle-outline" size={16} color={COLORS.primary} />
           </View>
-          <Text style={styles.pendingAmount}>₹12,450<Text style={styles.pendingDecimal}>.00</Text></Text>
+          <Text style={styles.pendingAmount}>
+            {preferences.currency}
+            {pendingThisMonth.toLocaleString()}
+            <Text style={styles.pendingDecimal}>.00</Text>
+          </Text>
         </View>
 
         <View style={[styles.smallCard, styles.settledCard]}>
@@ -92,37 +173,272 @@ export const DashboardScreen = () => {
             </View>
             <Icon name="checkmark-circle-outline" size={18} color={COLORS.gray} />
           </View>
-          <Text style={styles.settledAmount}>₹17,870<Text style={styles.settledDecimal}>.00</Text></Text>
+          <Text style={styles.settledAmount}>
+            {preferences.currency}
+            {settledThisMonth.toLocaleString()}
+            <Text style={styles.settledDecimal}>.00</Text>
+          </Text>
         </View>
       </View>
 
+      {/* Lending Records Section */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Lending Records</Text>
-        <Text style={styles.viewAll}>View all</Text>
+        <TouchableOpacity onPress={() => setHistoryVisible(true)}>
+          <Text style={styles.viewAll}>View all</Text>
+        </TouchableOpacity>
       </View>
 
-      {RECORDS.map((item, index) => (
-        <View key={index} style={styles.recordRow}>
-          <Avatar type={getAvatarType(item.avatarIdx)} size={44} />
-          <View style={styles.recordInfo}>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.type}>{item.type}</Text>
-          </View>
-          <View style={styles.recordRight}>
-            <Text style={styles.price}>{item.amount}</Text>
-            <View style={[
-              styles.statusPill,
-              item.status === 'Pending' ? styles.statusPending : styles.statusSettled
-            ]}>
-              <Text style={[
-                styles.statusText,
-                item.status === 'Pending' ? styles.textPending : styles.textSettled
-              ]}>{item.status}</Text>
+      {latestRecords.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No transactions logged yet.</Text>
+        </View>
+      ) : (
+        latestRecords.map((item, index) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.recordRow}
+            onPress={() => {
+              setSelectedRecord(item);
+              setDetailVisible(true);
+            }}
+          >
+            <Avatar type={getAvatarType(index % 6)} size={44} />
+            <View style={styles.recordInfo}>
+              <Text style={styles.name}>{item.contactName}</Text>
+              <Text style={styles.type}>{item.occasion}</Text>
             </View>
+            <View style={styles.recordRight}>
+              <Text style={[styles.price, { color: item.type === 'gave' ? '#EF4444' : '#10B981' }]}>
+                {item.type === 'gave' ? '-' : '+'}
+                {preferences.currency}
+                {item.amount.toLocaleString()}
+              </Text>
+              <View
+                style={[
+                  styles.statusPill,
+                  item.status === 'pending' ? styles.statusPending : styles.statusSettled,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    item.status === 'pending' ? styles.textPending : styles.textSettled,
+                  ]}
+                >
+                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
+
+      {/* MODAL 1: Full Transaction History */}
+      <Modal visible={historyVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Transaction History</Text>
+              <TouchableOpacity onPress={() => setHistoryVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={memories}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item, index }) => (
+                <View style={styles.recordRow}>
+                  <Avatar type={getAvatarType(index % 6)} size={44} />
+                  <View style={styles.recordInfo}>
+                    <Text style={styles.name}>{item.contactName}</Text>
+                    <Text style={styles.type}>
+                      {item.occasion} • {item.date}
+                    </Text>
+                  </View>
+                  <View style={styles.recordRight}>
+                    <Text style={[styles.price, { color: item.type === 'gave' ? '#EF4444' : '#10B981' }]}>
+                      {item.type === 'gave' ? '-' : '+'}
+                      {preferences.currency}
+                      {item.amount.toLocaleString()}
+                    </Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        item.status === 'pending' ? styles.statusPending : styles.statusSettled,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          item.status === 'pending' ? styles.textPending : styles.textSettled,
+                        ]}
+                      >
+                        {item.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            />
           </View>
         </View>
-      ))}
-      <View style={{height: 100}} />
+      </Modal>
+
+      {/* MODAL 2: WhatsApp Reminders List */}
+      <Modal visible={remindVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pending Reminders</Text>
+              <TouchableOpacity onPress={() => setRemindVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={memories.filter((m) => m.status === 'pending')}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No pending reminders found.</Text>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.reminderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{item.contactName}</Text>
+                    <Text style={styles.type}>
+                      Owes: {preferences.currency}
+                      {item.amount.toLocaleString()} for {item.occasion}
+                    </Text>
+                  </View>
+
+                  {preferences.whatsappReminders && (
+                    <TouchableOpacity
+                      style={styles.remindBadge}
+                      onPress={() => triggerWhatsAppReminder(item)}
+                    >
+                      <Icon name="logo-whatsapp" size={16} color={COLORS.text} />
+                      <Text style={styles.remindBadgeText}>Remind</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 3: Record Details / Settle Action */}
+      <Modal visible={detailVisible} animationType="fade" transparent>
+        <View style={styles.detailModalRoot}>
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>Transaction Detail</Text>
+              <TouchableOpacity onPress={() => setDetailVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedRecord && (
+              <View style={{ gap: 15 }}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Contact Name</Text>
+                  <Text style={styles.detailValue}>{selectedRecord.contactName}</Text>
+                </View>
+                {selectedRecord.whatsappNumber && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>WhatsApp</Text>
+                    <Text style={styles.detailValue}>{selectedRecord.whatsappNumber}</Text>
+                  </View>
+                )}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Amount</Text>
+                  <Text style={styles.detailValue}>
+                    {preferences.currency}
+                    {selectedRecord.amount.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Occasion</Text>
+                  <Text style={styles.detailValue}>{selectedRecord.occasion}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Date</Text>
+                  <Text style={styles.detailValue}>{selectedRecord.date}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status</Text>
+                  <Text style={[styles.detailValue, { color: selectedRecord.status === 'pending' ? '#D97706' : '#10B981' }]}>
+                    {selectedRecord.status.toUpperCase()}
+                  </Text>
+                </View>
+
+                {selectedRecord.status === 'pending' && (
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 15 }}>
+                    <TouchableOpacity
+                      style={styles.settleBtn}
+                      onPress={async () => {
+                        await updateMemoryStatus(selectedRecord.id, 'settled');
+                        setDetailVisible(false);
+                        Alert.alert('Success', 'Transaction Settled! ✅');
+                      }}
+                    >
+                      <Text style={styles.settleBtnText}>Mark Settle</Text>
+                    </TouchableOpacity>
+                    {preferences.whatsappReminders && (
+                      <TouchableOpacity
+                        style={styles.detailRemindBtn}
+                        onPress={() => triggerWhatsAppReminder(selectedRecord)}
+                      >
+                        <Icon name="logo-whatsapp" size={18} color={COLORS.secondary} />
+                        <Text style={styles.detailRemindBtnText}>Remind</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 4: Contact's Transaction History */}
+      <Modal visible={contactHistoryVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedContact}'s Memories</Text>
+              <TouchableOpacity onPress={() => setContactHistoryVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={memories.filter((m) => m.contactName === selectedContact)}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <View style={styles.reminderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{item.occasion}</Text>
+                    <Text style={styles.type}>{item.date}</Text>
+                  </View>
+                  <Text style={[styles.price, { color: item.type === 'gave' ? '#EF4444' : '#10B981' }]}>
+                    {item.type === 'gave' ? '-' : '+'}
+                    {preferences.currency}
+                    {item.amount.toLocaleString()}
+                  </Text>
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <View style={{ height: 100 }} />
     </ScrollView>
   );
 };
@@ -321,6 +637,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   recordInfo: {
     flex: 1,
@@ -342,7 +660,6 @@ const styles = StyleSheet.create({
   },
   price: {
     fontWeight: '700',
-    color: COLORS.text,
     fontSize: 14,
   },
   statusPill: {
@@ -365,5 +682,127 @@ const styles = StyleSheet.create({
   },
   textSettled: {
     color: COLORS.success,
+  },
+  emptyContainer: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: COLORS.gray,
+    fontSize: 14,
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 19, 43, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  remindBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  remindBadgeText: {
+    fontSize: 12,
+    color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  detailModalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 19, 43, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  detailCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 10,
+  },
+  detailTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    color: COLORS.gray,
+    fontSize: 14,
+  },
+  detailValue: {
+    fontWeight: '700',
+    color: COLORS.text,
+    fontSize: 14,
+  },
+  settleBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  settleBtnText: {
+    color: COLORS.secondary,
+    fontWeight: '700',
+  },
+  detailRemindBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 8,
+  },
+  detailRemindBtnText: {
+    color: COLORS.secondary,
+    fontWeight: '700',
   },
 });

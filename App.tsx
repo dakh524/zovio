@@ -7,6 +7,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { View } from 'react-native';
 
+import { ZovioProvider } from './src/store/ZovioContext';
+
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
@@ -44,9 +46,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
+        <ZovioProvider>
+          <NavigationContainer>
+            <AppNavigator />
+          </NavigationContainer>
+        </ZovioProvider>
       </View>
     </SafeAreaProvider>
   );

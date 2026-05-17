@@ -1,103 +1,384 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+  Alert,
+  FlatList,
+} from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
+import { useZovio, Memory } from '../store/ZovioContext';
+import { useNavigation } from '@react-navigation/native';
 
 export const MoneyNotesScreen = () => {
+  const navigation = useNavigation<any>();
+  const { memories, deleteMemory, preferences } = useZovio();
+
+  // Selected period toggle
+  const [period, setPeriod] = useState<'Day' | 'Week' | 'Month' | 'Year'>('Day');
+  const [currentShift, setCurrentShift] = useState(0); // Offset in time
+
+  // Modal State
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Memory | null>(null);
+  const [journalModalVisible, setJournalModalVisible] = useState(false);
+
+  // Dynamic Time Helper
+  const getPeriodRange = () => {
+    const today = new Date();
+    if (period === 'Day') {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + currentShift);
+      return {
+        label: currentShift === 0 ? 'Today, ' + targetDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : targetDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
+        filterFn: (m: Memory) => m.date === targetDate.toISOString().split('T')[0],
+      };
+    } else if (period === 'Week') {
+      // Filter last 7 days of the offset week
+      const start = new Date(today);
+      start.setDate(today.getDate() - 7 + currentShift * 7);
+      const end = new Date(today);
+      end.setDate(today.getDate() + currentShift * 7);
+      return {
+        label: `${start.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        filterFn: (m: Memory) => {
+          const d = new Date(m.date);
+          return d >= start && d <= end;
+        },
+      };
+    } else if (period === 'Month') {
+      const targetMonth = new Date(today.getFullYear(), today.getMonth() + currentShift, 1);
+      return {
+        label: targetMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        filterFn: (m: Memory) => {
+          const d = new Date(m.date);
+          return d.getMonth() === targetMonth.getMonth() && d.getFullYear() === targetMonth.getFullYear();
+        },
+      };
+    } else {
+      const targetYear = today.getFullYear() + currentShift;
+      return {
+        label: `Year ${targetYear}`,
+        filterFn: (m: Memory) => new Date(m.date).getFullYear() === targetYear,
+      };
+    }
+  };
+
+  const periodRange = getPeriodRange();
+  const periodMemories = memories.filter(periodRange.filterFn);
+
+  // Earned / Spent Sums
+  const earned = periodMemories.filter((m) => m.type === 'received').reduce((sum, m) => sum + m.amount, 0);
+  const spent = periodMemories.filter((m) => m.type === 'gave').reduce((sum, m) => sum + m.amount, 0);
+  const balance = earned - spent;
+
+  // Pie Chart Calculations
+  const total = earned + spent;
+  const earnedPercentage = total > 0 ? Math.round((earned / total) * 100) : 50;
+  const spentPercentage = total > 0 ? Math.round((spent / total) * 100) : 50;
+
+  // Draw Pie Chart dynamically:
+  // circumference = 2 * PI * r = 2 * 3.1415 * 25 = 157
+  const r = 25;
+  const c = 2 * Math.PI * r;
+  const earnedStroke = (earnedPercentage / 100) * c;
+  const spentStroke = c - earnedStroke;
+
+  const handleShiftPeriod = (direction: 'back' | 'forward') => {
+    if (direction === 'back') {
+      setCurrentShift(currentShift - 1);
+    } else {
+      setCurrentShift(currentShift + 1);
+    }
+  };
+
+  const handleQuickAdd = (type: 'gave' | 'received') => {
+    navigation.navigate('LogMemory', { type });
+  };
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Money Notes</Text>
         <Icon name="calendar-outline" size={24} color={COLORS.text} />
       </View>
 
+      {/* Segment Selector */}
       <View style={styles.segmentControl}>
-        <View style={styles.segmentActive}><Text style={styles.segmentTextActive}>Day</Text></View>
-        <View style={styles.segmentInactive}><Text style={styles.segmentText}>Week</Text></View>
-        <View style={styles.segmentInactive}><Text style={styles.segmentText}>Month</Text></View>
-        <View style={styles.segmentInactive}><Text style={styles.segmentText}>Year</Text></View>
+        {(['Day', 'Week', 'Month', 'Year'] as const).map((p) => (
+          <TouchableOpacity
+            key={p}
+            style={period === p ? styles.segmentActive : styles.segmentInactive}
+            onPress={() => {
+              setPeriod(p);
+              setCurrentShift(0); // Reset offset
+            }}
+          >
+            <Text style={period === p ? styles.segmentTextActive : styles.segmentText}>{p}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
+      {/* Navigation Arrow */}
       <View style={styles.dateSelector}>
-        <Icon name="chevron-back" size={20} color={COLORS.text} />
-        <Text style={styles.dateText}>Today, 21 Sep 2025</Text>
-        <Icon name="chevron-forward" size={20} color={COLORS.text} />
+        <TouchableOpacity onPress={() => handleShiftPeriod('back')}>
+          <Icon name="chevron-back" size={20} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.dateText}>{periodRange.label}</Text>
+        <TouchableOpacity onPress={() => handleShiftPeriod('forward')}>
+          <Icon name="chevron-forward" size={20} color={COLORS.text} />
+        </TouchableOpacity>
       </View>
 
+      {/* Summary Card */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
+          <TouchableOpacity
+            style={styles.summaryItem}
+            onPress={() => handleQuickAdd('received')}
+          >
             <View>
               <Text style={styles.summaryLabel}>Earned</Text>
-              <Text style={styles.summaryValueEarned}>₹2,850</Text>
+              <Text style={styles.summaryValueEarned}>
+                {preferences.currency}
+                {earned.toLocaleString()}
+              </Text>
             </View>
             <Icon name="add-circle" size={24} color={COLORS.success} />
-          </View>
-          <View style={styles.summaryItem}>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.summaryItem}
+            onPress={() => handleQuickAdd('gave')}
+          >
             <View>
               <Text style={styles.summaryLabel}>Spent</Text>
-              <Text style={styles.summaryValueSpent}>₹1,450</Text>
+              <Text style={styles.summaryValueSpent}>
+                {preferences.currency}
+                {spent.toLocaleString()}
+              </Text>
             </View>
-            <Icon name="add-circle" size={24} color={COLORS.success} />
-          </View>
+            <Icon name="add-circle" size={24} color="#EF4444" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.balanceContainer}>
           <Text style={styles.balanceLabel}>Balance</Text>
-          <Text style={styles.balanceValue}>₹ 1,400</Text>
+          <Text style={[styles.balanceValue, { color: balance >= 0 ? COLORS.success : '#EF4444' }]}>
+            {balance < 0 ? '-' : ''}
+            {preferences.currency}
+            {Math.abs(balance).toLocaleString()}
+          </Text>
         </View>
 
+        {/* Dynamic Pie Chart */}
         <View style={styles.pieContainer}>
           <View style={styles.pieLegendLeft}>
             <View style={styles.pieLegendDotGreen} />
             <Text style={styles.pieLegendTitle}>Earned</Text>
-            <Text style={styles.pieLegendPercent}>66%</Text>
-            <Text style={styles.pieLegendAmount}>₹2,850</Text>
+            <Text style={styles.pieLegendPercent}>{earnedPercentage}%</Text>
+            <Text style={styles.pieLegendAmount}>
+              {preferences.currency}
+              {earned.toLocaleString()}
+            </Text>
           </View>
-          
+
           <View style={styles.pieSvg}>
-             <Svg width={100} height={100} viewBox="0 0 100 100">
-               {/* 66% Green */}
-               <Path d="M50 50 L50 0 A50 50 0 1 1 5 28 Z" fill={COLORS.success} />
-               {/* 34% Red */}
-               <Path d="M50 50 L5 28 A50 50 0 0 1 50 0 Z" fill="#EF4444" />
-             </Svg>
+            <Svg width={100} height={100} viewBox="0 0 100 100">
+              <Circle
+                cx="50"
+                cy="50"
+                r={r}
+                fill="transparent"
+                stroke="#EF4444"
+                strokeWidth="16"
+              />
+              <Circle
+                cx="50"
+                cy="50"
+                r={r}
+                fill="transparent"
+                stroke={COLORS.success}
+                strokeWidth="16"
+                strokeDasharray={`${earnedStroke} ${c}`}
+                transform="rotate(-90 50 50)"
+              />
+            </Svg>
           </View>
 
           <View style={styles.pieLegendRight}>
             <View style={styles.pieLegendDotRed} />
             <Text style={styles.pieLegendTitle}>Spent</Text>
-            <Text style={styles.pieLegendPercent}>34%</Text>
-            <Text style={styles.pieLegendAmount}>₹1,450</Text>
+            <Text style={styles.pieLegendPercent}>{spentPercentage}%</Text>
+            <Text style={styles.pieLegendAmount}>
+              {preferences.currency}
+              {spent.toLocaleString()}
+            </Text>
           </View>
         </View>
       </View>
 
+      {/* Daily Journal List */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Daily Journal</Text>
-        <Text style={styles.viewAll}>View all</Text>
+        <TouchableOpacity onPress={() => setJournalModalVisible(true)}>
+          <Text style={styles.viewAll}>View all</Text>
+        </TouchableOpacity>
       </View>
 
-      {[
-        {name: 'Dinner with Rimi', amount: '₹750.00', type: 'spent'},
-        {name: 'Auto to Office', amount: '₹120.00', type: 'spent'},
-        {name: 'Project Payment', amount: '₹2,850.00', type: 'earned'},
-        {name: 'Coffee', amount: '₹80.00', type: 'spent'},
-      ].map((item, index) => (
-        <View key={index} style={styles.journalRow}>
-          <Text style={styles.journalName}>{item.name}</Text>
+      {periodMemories.slice(0, 5).map((item, index) => (
+        <TouchableOpacity
+          key={item.id}
+          style={styles.journalRow}
+          onPress={() => {
+            setSelectedItem(item);
+            setDetailVisible(true);
+          }}
+        >
+          <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
           <View style={styles.journalRight}>
-            <Text style={styles.journalAmount}>{item.amount}</Text>
-            <Icon 
-              name={item.type === 'spent' ? 'arrow-down' : 'arrow-up'} 
-              size={16} 
-              color={item.type === 'spent' ? '#EF4444' : COLORS.success} 
+            <Text style={styles.journalAmount}>
+              {preferences.currency}
+              {item.amount.toLocaleString()}
+            </Text>
+            <Icon
+              name={item.type === 'gave' ? 'arrow-down' : 'arrow-up'}
+              size={16}
+              color={item.type === 'gave' ? '#EF4444' : COLORS.success}
+            />
+          </View>
+        </TouchableOpacity>
+      ))}
+
+      {periodMemories.length === 0 && (
+        <Text style={{ textAlign: 'center', marginTop: 15, color: COLORS.gray }}>
+          No records logged for this period.
+        </Text>
+      )}
+
+      {/* Detail overlay modal with delete */}
+      <Modal visible={detailVisible} animationType="fade" transparent>
+        <View style={styles.detailModalRoot}>
+          <View style={styles.detailCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailTitle}>Journal Detail</Text>
+              <TouchableOpacity onPress={() => setDetailVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedItem && (
+              <View style={{ gap: 15 }}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Contact Name</Text>
+                  <Text style={styles.detailValue}>{selectedItem.contactName}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Type</Text>
+                  <Text style={[styles.detailValue, { color: selectedItem.type === 'gave' ? '#EF4444' : COLORS.success }]}>
+                    {selectedItem.type.toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Amount</Text>
+                  <Text style={styles.detailValue}>
+                    {preferences.currency}
+                    {selectedItem.amount.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Occasion</Text>
+                  <Text style={styles.detailValue}>{selectedItem.occasion}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Date</Text>
+                  <Text style={styles.detailValue}>{selectedItem.date}</Text>
+                </View>
+                {selectedItem.notes && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Notes</Text>
+                    <Text style={styles.detailValue}>{selectedItem.notes}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete Record',
+                      'Are you sure you want to delete this memory?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await deleteMemory(selectedItem.id);
+                            setDetailVisible(false);
+                            Alert.alert('Success', 'Memory Deleted! 🗑️');
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Icon name="trash-outline" size={18} color={COLORS.white} />
+                  <Text style={styles.deleteBtnText}>Delete Memory</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Full Journal List */}
+      <Modal visible={journalModalVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>All Journal Entries</Text>
+              <TouchableOpacity onPress={() => setJournalModalVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={periodMemories}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.journalRow}
+                  onPress={() => {
+                    setSelectedItem(item);
+                    setDetailVisible(true);
+                  }}
+                >
+                  <Text style={styles.journalName}>{item.contactName} ({item.occasion})</Text>
+                  <View style={styles.journalRight}>
+                    <Text style={styles.journalAmount}>
+                      {preferences.currency}
+                      {item.amount.toLocaleString()}
+                    </Text>
+                    <Icon
+                      name={item.type === 'gave' ? 'arrow-down' : 'arrow-up'}
+                      size={16}
+                      color={item.type === 'gave' ? '#EF4444' : COLORS.success}
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
             />
           </View>
         </View>
-      ))}
-      <View style={{height: 100}} />
+      </Modal>
+
+      <View style={{ height: 100 }} />
     </ScrollView>
   );
 };
@@ -189,12 +470,12 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
   summaryValueEarned: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
   },
   summaryValueSpent: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
   },
@@ -219,6 +500,8 @@ const styles = StyleSheet.create({
   pieSvg: {
     width: 100,
     height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pieLegendLeft: {
     alignItems: 'flex-start',
@@ -290,6 +573,85 @@ const styles = StyleSheet.create({
   journalAmount: {
     fontSize: 14,
     fontWeight: '600',
+    color: COLORS.text,
+  },
+  detailModalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 19, 43, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  detailCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 10,
+  },
+  detailTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  detailLabel: {
+    color: COLORS.gray,
+    fontSize: 14,
+  },
+  detailValue: {
+    fontWeight: '700',
+    color: COLORS.text,
+    fontSize: 14,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 8,
+    marginTop: 15,
+  },
+  deleteBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 19, 43, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.text,
   },
 });
