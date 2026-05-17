@@ -20,7 +20,7 @@ export const ContactHistoryScreen = () => {
   const route = useRoute<any>();
   const { contactName } = route.params || { contactName: '' };
   
-  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences } = useZovio();
+  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences, deleteMemory } = useZovio();
 
   // Filter memories with this contact
   const contactMemories = memories.filter((m) => m.contactName === contactName);
@@ -53,6 +53,43 @@ export const ContactHistoryScreen = () => {
             Alert.alert('Success', `✅ Settled with ${item.contactName}!`);
           },
         },
+      ]
+    );
+  };
+
+  const handleLongPressRecord = (item: Memory) => {
+    Alert.alert(
+      'Manage Record',
+      'Choose an action for this transaction:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: '✏️ Edit', 
+          onPress: () => {
+            navigation.navigate('LogMemory', { editMemoryId: item.id, mode: 'friends' });
+          }
+        },
+        { 
+          text: '🗑️ Delete', 
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Record',
+              'Delete this record? This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await deleteMemory(item.id);
+                    Alert.alert('Success', 'Record deleted 🗑️');
+                  }
+                }
+              ]
+            );
+          }
+        }
       ]
     );
   };
@@ -110,11 +147,15 @@ export const ContactHistoryScreen = () => {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={s.emptyContainer}>
-            <Text style={s.emptyText}>No memories logged with this contact.</Text>
+            <Text style={s.emptyText}>No transactions with {contactName} yet</Text>
           </View>
         }
         renderItem={({ item }) => (
-          <View style={s.ledgerCard}>
+          <TouchableOpacity 
+            style={s.ledgerCard}
+            onLongPress={() => handleLongPressRecord(item)}
+            activeOpacity={0.8}
+          >
             <View style={s.ledgerHeader}>
               <View>
                 <Text style={s.occasionText}>{item.occasion}</Text>
@@ -153,7 +194,7 @@ export const ContactHistoryScreen = () => {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>

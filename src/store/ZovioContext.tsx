@@ -53,6 +53,7 @@ interface ZovioContextType {
   addMemory: (memory: Omit<Memory, 'id'>) => Promise<void>;
   updateMemoryStatus: (id: string, status: 'pending' | 'settled') => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
+  updateMemory: (id: string, entry: Partial<Memory>) => Promise<void>;
   updateUserProfile: (name: string, avatarUri?: string) => Promise<void>;
   updatePreferences: (prefs: Partial<Preferences>) => Promise<void>;
   exportToPDF: () => Promise<void>;
@@ -194,6 +195,15 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await saveMemoriesToStorage(updated);
 
     const updatedNotes = notes.filter((n) => n.id !== id);
+    await saveNotesToStorage(updatedNotes);
+  };
+
+  // Update Memory
+  const updateMemory = async (id: string, entry: Partial<Memory>) => {
+    const updated = memories.map((m) => (m.id === id ? { ...m, ...entry } : m));
+    await saveMemoriesToStorage(updated);
+
+    const updatedNotes = notes.map((n) => (n.id === id ? { ...n, ...entry } : n));
     await saveNotesToStorage(updatedNotes);
   };
 
@@ -555,6 +565,7 @@ Please settle when you get a chance 😊
         addMemory,
         updateMemoryStatus,
         deleteMemory,
+        updateMemory,
         updateUserProfile,
         updatePreferences,
         exportToPDF,

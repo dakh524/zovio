@@ -22,7 +22,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 export const LogMemoryScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { memories, addMemory, preferences, addFinance } = useZovio();
+  const { memories, addMemory, preferences, addFinance, finances, updateMemory, updateFinance } = useZovio();
 
   // Mode: 'friends' (Lending Diaries) or 'personal' (Finance Ledger)
   const [logMode, setLogMode] = useState<'friends' | 'personal'>('friends');
@@ -53,21 +53,51 @@ export const LogMemoryScreen = () => {
   // Modal States
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
 
-  // Sync route pre-sets
+  // Edit presets
+  const editMemoryId = route.params?.editMemoryId;
+  const editFinanceId = route.params?.editFinanceId;
+
+  // Sync route pre-sets and pre-fill for edit flow
   useEffect(() => {
-    if (route.params?.type) {
-      if (route.params.type === 'income' || route.params.type === 'expense') {
-        setFinType(route.params.type);
-        setLogMode('personal');
-      } else {
-        setType(route.params.type);
+    if (editMemoryId) {
+      const mem = memories.find((m) => m.id === editMemoryId);
+      if (mem) {
+        setAmount(mem.amount.toString());
+        setDate(new Date(mem.date));
+        setNotes(mem.notes || '');
+        setContactName(mem.contactName);
+        setWhatsappNumber(mem.whatsappNumber || '');
+        setShowWhatsapp(!!mem.whatsappNumber);
+        setSelectedOccasion(mem.occasion);
+        setType(mem.type);
         setLogMode('friends');
       }
+    } else if (editFinanceId) {
+      const fin = finances.find((f) => f.id === editFinanceId);
+      if (fin) {
+        setAmount(fin.amount.toString());
+        setDate(new Date(fin.date));
+        setNotes(fin.notes || '');
+        setFinTitle(fin.title);
+        setFinType(fin.type);
+        setFinCategory(fin.category);
+        setLogMode('personal');
+      }
+    } else {
+      if (route.params?.type) {
+        if (route.params.type === 'income' || route.params.type === 'expense') {
+          setFinType(route.params.type);
+          setLogMode('personal');
+        } else {
+          setType(route.params.type);
+          setLogMode('friends');
+        }
+      }
+      if (route.params?.mode) {
+        setLogMode(route.params.mode);
+      }
     }
-    if (route.params?.mode) {
-      setLogMode(route.params.mode);
-    }
-  }, [route.params?.type, route.params?.mode]);
+  }, [route.params?.type, route.params?.mode, editMemoryId, editFinanceId, memories, finances]);
 
   // Extract unique contacts from previous memories
   const uniqueContacts = Array.from(new Set(memories.map((m) => m.contactName))).map(
@@ -130,7 +160,12 @@ export const LogMemoryScreen = () => {
         notes: notes.trim(),
       };
 
-      await addMemory(payload);
+      if (editMemoryId) {
+        await updateMemory(editMemoryId, payload);
+        Alert.alert('Success', '✅ Record updated!');
+      } else {
+        await addMemory(payload);
+      }
       
       // Clear Form
       setContactName('');
@@ -146,14 +181,21 @@ export const LogMemoryScreen = () => {
         return;
       }
 
-      await addFinance({
+      const payload = {
         title: finTitle.trim(),
         amount: numericAmount,
         category: finCategory,
         type: finType,
         date: dateStr,
         notes: notes.trim() || undefined,
-      });
+      };
+
+      if (editFinanceId) {
+        await updateFinance(editFinanceId, payload);
+        Alert.alert('Success', '✅ Record updated!');
+      } else {
+        await addFinance(payload);
+      }
 
       // Clear Form
       setFinTitle('');
@@ -164,8 +206,12 @@ export const LogMemoryScreen = () => {
     setDate(new Date());
     setNotes('');
 
-    // Navigate to Dashboard
-    navigation.navigate('Dashboard');
+    // Navigate back if editing, or to Dashboard if adding
+    if (editMemoryId || editFinanceId) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Dashboard');
+    }
   };
 
   return (
@@ -457,7 +503,7 @@ export const LogMemoryScreen = () => {
       {/* Action Button */}
       <TouchableOpacity style={s.sb} onPress={handleLog}>
         <Text style={s.sbt}>
-          {logMode === 'friends' ? 'Log Money Memory' : 'Add Finance Entry'}
+          {editMemoryId ? 'Update Memory' : editFinanceId ? 'Update Finance Entry' : logMode === 'friends' ? 'Log Money Memory' : 'Add Finance Entry'}
         </Text>
       </TouchableOpacity>
 

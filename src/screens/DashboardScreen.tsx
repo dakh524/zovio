@@ -19,7 +19,7 @@ import Svg, { Path } from 'react-native-svg';
 
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences, finances } = useZovio();
+  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences, finances, deleteMemory } = useZovio();
 
   // Modal States
   const [historyVisible, setHistoryVisible] = useState(false);
@@ -96,6 +96,47 @@ export const DashboardScreen = () => {
   // Top 5 records for display
   const latestRecords = memories.slice(0, 5);
 
+  const handleLongPressRecord = (item: Memory) => {
+    Alert.alert(
+      'Manage Record',
+      'Choose an action for this transaction:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: '✏️ Edit', 
+          onPress: () => {
+            setHistoryVisible(false);
+            setDetailVisible(false);
+            navigation.navigate('LogMemory', { editMemoryId: item.id, mode: 'friends' });
+          }
+        },
+        { 
+          text: '🗑️ Delete', 
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Record',
+              'Delete this record? This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await deleteMemory(item.id);
+                    setHistoryVisible(false);
+                    setDetailVisible(false);
+                    Alert.alert('Success', 'Record deleted 🗑️');
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
   // Sparkline generator (Last 7 days trend of pending transactions)
   const renderSparkline = () => {
     // Generate mock sparkline path based on real transaction count/values
@@ -131,23 +172,47 @@ export const DashboardScreen = () => {
         </View>
       </View>
 
-      {/* Personal Finance Tracks (ADD 1) */}
+      {/* Personal Finance Summary Cards (ADD 2) */}
       <View style={styles.financeStatsRow}>
+        {/* Income Card */}
         <View style={[styles.financeCard, { backgroundColor: '#E8F5E9', borderColor: '#A5D6A7' }]}>
-          <Text style={[styles.financeCardLabel, { color: '#2E7D32' }]}>Income</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={[styles.financeCardLabel, { color: '#2E7D32', marginBottom: 0 }]}>Income</Text>
+            <Icon name="arrow-up" size={14} color="#1B5E20" />
+          </View>
           <Text style={[styles.financeCardVal, { color: '#1B5E20' }]}>
             {preferences.currency}{totalIncome.toLocaleString()}
           </Text>
         </View>
+
+        {/* Expenses Card */}
         <View style={[styles.financeCard, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]}>
-          <Text style={[styles.financeCardLabel, { color: '#C62828' }]}>Expenses</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={[styles.financeCardLabel, { color: '#C62828', marginBottom: 0 }]}>Expenses</Text>
+            <Icon name="arrow-down" size={14} color="#B71C1C" />
+          </View>
           <Text style={[styles.financeCardVal, { color: '#B71C1C' }]}>
             {preferences.currency}{totalExpenses.toLocaleString()}
           </Text>
         </View>
-        <View style={[styles.financeCard, { backgroundColor: '#FFFDF4', borderColor: COLORS.primary }]}>
-          <Text style={[styles.financeCardLabel, { color: COLORS.secondary }]}>Savings</Text>
-          <Text style={[styles.financeCardVal, { color: COLORS.secondary }]}>
+
+        {/* Savings Card */}
+        <View style={[
+          styles.financeCard, 
+          { 
+            backgroundColor: totalSavings >= 0 ? '#E8F5E9' : '#FFEBEE', 
+            borderColor: totalSavings >= 0 ? '#A5D6A7' : '#FFCDD2' 
+          }
+        ]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={[styles.financeCardLabel, { color: totalSavings >= 0 ? '#2E7D32' : '#C62828', marginBottom: 0 }]}>Savings</Text>
+            <Icon 
+              name={totalSavings >= 0 ? "arrow-up" : "arrow-down"} 
+              size={14} 
+              color={totalSavings >= 0 ? '#1B5E20' : '#B71C1C'} 
+            />
+          </View>
+          <Text style={[styles.financeCardVal, { color: totalSavings >= 0 ? '#1B5E20' : '#B71C1C' }]}>
             {preferences.currency}{totalSavings.toLocaleString()}
           </Text>
         </View>
@@ -264,6 +329,7 @@ export const DashboardScreen = () => {
               setSelectedRecord(item);
               setDetailVisible(true);
             }}
+            onLongPress={() => handleLongPressRecord(item)}
           >
             <Avatar type={getAvatarType(index % 6)} size={44} />
             <View style={styles.recordInfo}>
@@ -317,6 +383,11 @@ export const DashboardScreen = () => {
                 style={styles.searchInput}
                 placeholderTextColor={COLORS.gray}
               />
+              {historySearch.length > 0 && (
+                <TouchableOpacity onPress={() => setHistorySearch('')}>
+                  <Icon name="close-circle" size={18} color={COLORS.gray} style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Filter Chips (ADD 5) */}
@@ -359,12 +430,19 @@ export const DashboardScreen = () => {
               keyExtractor={(item) => item.id}
               showsVerticalScrollIndicator={false}
               renderItem={({ item, index }) => (
-                <View style={styles.recordRow}>
+                <TouchableOpacity 
+                  style={styles.recordRow}
+                  onPress={() => {
+                    setSelectedRecord(item);
+                    setDetailVisible(true);
+                  }}
+                  onLongPress={() => handleLongPressRecord(item)}
+                >
                   <Avatar type={getAvatarType(index % 6)} size={44} />
                   <View style={styles.recordInfo}>
                     <Text style={styles.name}>{item.contactName}</Text>
                     <Text style={styles.type}>
-                      {item.occasion} • {item.date}
+                       {item.occasion} • {item.date}
                     </Text>
                   </View>
                   <View style={styles.recordRight}>
@@ -389,7 +467,7 @@ export const DashboardScreen = () => {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
             />
           </View>
