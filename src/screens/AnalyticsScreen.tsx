@@ -587,7 +587,7 @@ export const AnalyticsScreen = () => {
           )}
 
           {/* 1. AREA LINE CHART WITH SELECT HALO (折线面积图) */}
-          <CyberPanel title="折线面积图 — Expense Trend">
+          <CyberPanel title="Expense Trend">
             <View style={styles.chartWrapper}>
               <View style={styles.chartWithYAxis}>
                 <View style={styles.yAxisLabels}>
@@ -658,7 +658,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 2. DOUBLE STACKED BAR CHART ("堆叠柱状图") */}
-          <CyberPanel title="堆叠柱状图 — Flow Comparison">
+          <CyberPanel title="Flow Comparison">
             <View style={styles.stackedLayout}>
               <View style={styles.stackedBarContainer}>
                 {/* Left Stacked Column (Lent/Gave) */}
@@ -700,7 +700,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 3. PENTAGON RADAR SPIDER CHART (雷达图) */}
-          <CyberPanel title="雷达图 — Lending Categories">
+          <CyberPanel title="Lending Categories">
             <View style={styles.radarLayout}>
               <View style={styles.radarGraphic}>
                 <Svg width={150} height={150} viewBox="0 0 150 150">
@@ -749,7 +749,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* Donut Card Distribution */}
-          <CyberPanel title="饼图 — Lending Distribution">
+          <CyberPanel title="Lending Distribution">
             <View style={styles.donutOverview}>
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
@@ -801,7 +801,7 @@ export const AnalyticsScreen = () => {
         <>
           {/* PERSONAL FINANCE TRACK */}
           {/* 1. COMBINED BAR & LINE CASH FLOW CHART ("柱折图") */}
-          <CyberPanel title="柱折图 — Cash Flow Combined Grid">
+          <CyberPanel title="Cash Flow Combined Grid">
             <View style={styles.chartWrapper}>
               <View style={styles.chartWithYAxis}>
                 <View style={styles.yAxisLabels}>
@@ -871,7 +871,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 2. TRANSACTION SCATTER BUBBLE CHART ("散点图") */}
-          <CyberPanel title="散点图 — Transaction Bubbles Desk">
+          <CyberPanel title="Transaction Bubbles Desk">
             <View style={styles.chartWrapper}>
               <View style={styles.chartWithYAxis}>
                 <View style={styles.yAxisLabels}>
@@ -934,7 +934,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 3. JAPANESE CANDLESTICK CHART */}
-          <CyberPanel title="日本蜡烛图 — Japanese Candlestick Trend">
+          <CyberPanel title="Japanese Candlestick Trend">
             <View style={styles.chartWrapper}>
               <View style={styles.chartWithYAxis}>
                 <View style={styles.yAxisLabels}>
@@ -998,7 +998,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 4. SEGMENTED CIRCULAR GAUGE SPEEDOMETER (仪表盘) */}
-          <CyberPanel title="仪表盘 — Savings Ring Speedometer">
+          <CyberPanel title="Savings Ring Speedometer">
             <View style={styles.gaugeContainer}>
               <View style={styles.gaugeGraphic}>
                 <Svg width={110} height={110} viewBox="0 0 100 100">
@@ -1052,7 +1052,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* 5. CATEGORY LEAKAGE WATERFALL PROGRESS PANEL (横向柱状图) */}
-          <CyberPanel title="横向柱状图 — Category Leakage share">
+          <CyberPanel title="Category Leakage Share">
             <View style={styles.waterfallWrapper}>
               <Text style={styles.waterfallTitle}>Percentage Leaked Share</Text>
               <View style={styles.waterfallBar}>
@@ -1085,7 +1085,7 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* Category Donut Distribution */}
-          <CyberPanel title="饼图 — Outflow Category Breakdown">
+          <CyberPanel title="Outflow Category Breakdown">
             <View style={styles.donutOverview}>
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
