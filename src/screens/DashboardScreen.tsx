@@ -20,7 +20,17 @@ import Svg, { Path } from 'react-native-svg';
 
 export const DashboardScreen = () => {
   const navigation = useNavigation<any>();
-  const { memories, updateMemoryStatus, triggerWhatsAppReminder, preferences, finances, deleteMemory } = useZovio();
+  const {
+    memories,
+    updateMemoryStatus,
+    triggerWhatsAppReminder,
+    preferences,
+    finances,
+    deleteMemory,
+    notifications,
+    markNotificationAsRead,
+    clearAllNotifications,
+  } = useZovio();
 
   // Modal States
   const [historyVisible, setHistoryVisible] = useState(false);
@@ -29,11 +39,14 @@ export const DashboardScreen = () => {
   const [selectedRecord, setSelectedRecord] = useState<Memory | null>(null);
   const [contactHistoryVisible, setContactHistoryVisible] = useState(false);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
 
   // Search & Filter States (ADD 5)
   const [historySearch, setHistorySearch] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'pending' | 'settled' | 'gave' | 'received'>('all');
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   // Dynamic Calculations
   const totalOwed = memories
@@ -167,8 +180,13 @@ export const DashboardScreen = () => {
           <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Profile')}>
             <Icon name="settings-outline" size={20} color={COLORS.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Profile')}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => setNotificationsVisible(true)}>
             <Icon name="notifications-outline" size={20} color={COLORS.text} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -677,6 +695,92 @@ export const DashboardScreen = () => {
         </View>
       </Modal>
 
+      {/* MODAL 5: Notification Center */}
+      <Modal visible={notificationsVisible} animationType="slide" transparent>
+        <View style={styles.modalRoot}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: '90%', maxWidth: 400 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#EEE', paddingBottom: 10 }}>
+              <Text style={[styles.modalTitle, { marginBottom: 0 }]}>🔔 Notification Center</Text>
+              <TouchableOpacity onPress={() => setNotificationsVisible(false)}>
+                <Icon name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={{ alignItems: 'center', marginVertical: 40, gap: 10 }}>
+                <Icon name="notifications-off-outline" size={48} color={COLORS.gray} />
+                <Text style={{ fontSize: 14, color: COLORS.gray, fontWeight: '500' }}>No notifications yet</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => {
+                  let iconName = 'notifications-outline';
+                  let iconColor = COLORS.primary;
+                  if (item.type === 'welcome') {
+                    iconName = 'sparkles';
+                    iconColor = '#F5A623';
+                  } else if (item.type === 'motivation') {
+                    iconName = 'happy-outline';
+                    iconColor = '#4CD964';
+                  } else if (item.type === 'reminder') {
+                    iconName = 'alarm-outline';
+                    iconColor = '#FF3B30';
+                  } else if (item.type === 'expense') {
+                    iconName = 'cash-outline';
+                    iconColor = '#007AFF';
+                  } else if (item.type === 'backup') {
+                    iconName = 'shield-checkmark-outline';
+                    iconColor = '#5856D6';
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.notificationCard,
+                        !item.isRead && styles.unreadNotificationCard
+                      ]}
+                      onPress={async () => {
+                        await markNotificationAsRead(item.id);
+                      }}
+                    >
+                      <View style={[styles.notificationIconWrap, { backgroundColor: iconColor + '20' }]}>
+                        <Icon name={iconName as any} size={20} color={iconColor} />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={[styles.notificationTitle, !item.isRead && { fontWeight: '700' }]}>{item.title}</Text>
+                        <Text style={styles.notificationBody}>{item.body}</Text>
+                        <Text style={styles.notificationTime}>{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 15 }}>
+              <TouchableOpacity
+                style={[styles.cancelBtn, { borderColor: '#FF3B30', borderWidth: 1 }]}
+                onPress={async () => {
+                  await clearAllNotifications();
+                  Alert.alert('Cleared', 'All notifications cleared! 🗑️');
+                }}
+              >
+                <Text style={{ color: '#FF3B30', fontWeight: '700' }}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={() => setNotificationsVisible(false)}
+              >
+                <Text style={styles.saveBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -1142,6 +1246,78 @@ const styles = StyleSheet.create({
   },
   sortChipTextActive: {
     color: COLORS.white,
+    fontWeight: '700',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
+    gap: 12,
+  },
+  unreadNotificationCard: {
+    backgroundColor: '#FFFDF4',
+    borderColor: COLORS.primary,
+  },
+  notificationIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  notificationBody: {
+    fontSize: 11,
+    color: COLORS.gray,
+    lineHeight: 16,
+  },
+  notificationTime: {
+    fontSize: 9,
+    color: COLORS.gray,
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    color: COLORS.secondary,
     fontWeight: '700',
   },
 });

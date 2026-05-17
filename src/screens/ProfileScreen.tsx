@@ -28,6 +28,7 @@ export const ProfileScreen = () => {
     exportToExcel,
     exportSecureBackup,
     restoreSecureBackup,
+    triggerTestPushNotification,
   } = useZovio();
 
   // Modal States
@@ -267,6 +268,15 @@ export const ProfileScreen = () => {
                 thumbColor="#fff"
               />
             </View>
+            <TouchableOpacity 
+              style={[s.saveBtn, { backgroundColor: COLORS.success, marginTop: 10, width: '100%' }]} 
+              onPress={async () => {
+                await triggerTestPushNotification();
+                setNotiModalVisible(false);
+              }}
+            >
+              <Text style={[s.saveBtnText, { color: COLORS.white }]}>🦉 Test Motivation Notification</Text>
+            </TouchableOpacity>
             <View style={s.modalActionRow}>
               <TouchableOpacity style={s.saveBtn} onPress={() => setNotiModalVisible(false)}>
                 <Text style={s.saveBtnText}>Done</Text>

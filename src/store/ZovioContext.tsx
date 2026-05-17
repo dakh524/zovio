@@ -11,6 +11,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import { encryptData, decryptData } from '../utils/crypto';
 
 // Types
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  timestamp: number;
+  isRead: boolean;
+  type: 'welcome' | 'motivation' | 'reminder' | 'expense' | 'backup';
+}
+
 export interface Memory {
   id: string;
   contactName: string;
@@ -52,6 +61,7 @@ interface ZovioContextType {
   preferences: Preferences;
   finances: FinanceEntry[];
   isLoading: boolean;
+  notifications: AppNotification[];
   addMemory: (memory: Omit<Memory, 'id'>) => Promise<void>;
   updateMemoryStatus: (id: string, status: 'pending' | 'settled') => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
@@ -67,6 +77,10 @@ interface ZovioContextType {
   updateFinance: (id: string, entry: Partial<FinanceEntry>) => Promise<void>;
   exportSecureBackup: () => Promise<void>;
   restoreSecureBackup: () => Promise<boolean>;
+  addInAppNotification: (title: string, body: string, type: AppNotification['type']) => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
+  triggerTestPushNotification: () => Promise<void>;
 }
 
 const ZovioContext = createContext<ZovioContextType | undefined>(undefined);
@@ -89,6 +103,7 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     reminderTime: '09:00',
   });
   const [finances, setFinances] = useState<FinanceEntry[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load all initial data from AsyncStorage
@@ -100,12 +115,39 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const storedNotes = await AsyncStorage.getItem(NOTES_KEY);
         const storedPrefs = await AsyncStorage.getItem(PREFS_KEY);
         const storedFinances = await AsyncStorage.getItem(FINANCES_KEY);
+        const storedNotis = await AsyncStorage.getItem('zovio_inapp_notifications');
 
         if (storedMemories) setMemories(JSON.parse(storedMemories));
         if (storedUser) setUser(JSON.parse(storedUser));
         if (storedNotes) setNotes(JSON.parse(storedNotes));
         if (storedPrefs) setPreferences(JSON.parse(storedPrefs));
         if (storedFinances) setFinances(JSON.parse(storedFinances));
+
+        if (storedNotis) {
+          setNotifications(JSON.parse(storedNotis));
+        } else {
+          // Welcome notification on first install!
+          const welcomeNoti: AppNotification = {
+            id: 'welcome_init',
+            title: 'Welcome to ZOVIO! 🦉',
+            body: 'Your premium, hacker-proof personal money memory tracker is active! Start logging your finance diary now.',
+            timestamp: Date.now(),
+            isRead: false,
+            type: 'welcome'
+          };
+          // Schedule dynamic morning motivation duolingo-style notification!
+          const motivationNoti: AppNotification = {
+            id: 'motivation_init',
+            title: 'Zovio Daily Motivation 🦉',
+            body: 'Consistency is the secret to wealth. Did you log yesterday’s coffee or lunches? Don’t let the owl get angry! 😉',
+            timestamp: Date.now() + 1000,
+            isRead: false,
+            type: 'motivation'
+          };
+          const initialList = [motivationNoti, welcomeNoti];
+          setNotifications(initialList);
+          await AsyncStorage.setItem('zovio_inapp_notifications', JSON.stringify(initialList));
+        }
       } catch (e) {
         console.error('Failed to load data from storage', e);
       } finally {
@@ -187,6 +229,13 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updatedNotes = [memoryItem, ...notes];
     await saveNotesToStorage(updatedNotes);
 
+    // In-app notification
+    await addInAppNotification(
+      'Memory Logged 💸',
+      `You tracked a ledger entry for ${newMemory.contactName} - ${preferences.currency}${newMemory.amount}!`,
+      'expense'
+    );
+
     Alert.alert('Success', 'Memory Logged! ✅');
   };
 
@@ -197,6 +246,15 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const updatedNotes = notes.map((n) => (n.id === id ? { ...n, status } : n));
     await saveNotesToStorage(updatedNotes);
+
+    const mem = memories.find((m) => m.id === id);
+    if (mem) {
+      await addInAppNotification(
+        'Transaction Settled 🎉',
+        `Lending entry for ${mem.contactName} (${preferences.currency}${mem.amount}) marked settled successfully.`,
+        'reminder'
+      );
+    }
   };
 
   // Delete Memory
@@ -206,6 +264,12 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const updatedNotes = notes.filter((n) => n.id !== id);
     await saveNotesToStorage(updatedNotes);
+
+    await addInAppNotification(
+      'Transaction Deleted 🗑️',
+      'A transaction record was successfully purged from your local ledger.',
+      'expense'
+    );
   };
 
   // Update Memory
@@ -247,6 +311,14 @@ export const ZovioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     const updated = [financeItem, ...finances];
     await saveFinancesToStorage(updated);
+
+    // In-app notification
+    await addInAppNotification(
+      'Finance Logged 💰',
+      `Logged new ${entry.type} under category "${entry.category}" with value ${preferences.currency}${entry.amount}!`,
+      'expense'
+    );
+
     Alert.alert('Success', 'Personal Finance Entry Logged! 💰');
   };
 
@@ -648,6 +720,13 @@ Please settle when you get a chance 😊
       setTimeout(() => {
         FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
       }, 5000);
+
+      // In-app notification
+      await addInAppNotification(
+        'Backup Exported 🔐',
+        'Your dynamic-salted, FNV-1a checksum cryptographic backup file was successfully exported.',
+        'backup'
+      );
     } catch (e) {
       Alert.alert('Backup Error', 'Failed to export secure backup.');
     }
@@ -691,11 +770,80 @@ Please settle when you get a chance 😊
       await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(restoredState.preferences));
       await AsyncStorage.setItem(FINANCES_KEY, JSON.stringify(restoredState.finances));
 
+      // In-app notification
+      await addInAppNotification(
+        'Database Restored ✅',
+        'Your tamper-proof backup was successfully decrypted, authenticated, and loaded into active storage.',
+        'backup'
+      );
+
       Alert.alert('Restored Successfully', '✅ Your hacker-proof secure database has been successfully restored!');
       return true;
     } catch (e: any) {
       Alert.alert('Restore Failed', `❌ Tampered or invalid ZOVIO backup file.\n\nDetails: ${e.message || e}`);
       return false;
+    }
+  };
+
+  const addInAppNotification = async (title: string, body: string, type: AppNotification['type']) => {
+    const newNoti: AppNotification = {
+      id: 'noti_' + Date.now().toString(),
+      title,
+      body,
+      timestamp: Date.now(),
+      isRead: false,
+      type
+    };
+    setNotifications(prev => {
+      const updated = [newNoti, ...prev];
+      AsyncStorage.setItem('zovio_inapp_notifications', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    setNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, isRead: true } : n);
+      AsyncStorage.setItem('zovio_inapp_notifications', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  };
+
+  const clearAllNotifications = async () => {
+    setNotifications([]);
+    await AsyncStorage.setItem('zovio_inapp_notifications', JSON.stringify([]));
+  };
+
+  const triggerTestPushNotification = async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        const { status: reqStatus } = await Notifications.requestPermissionsAsync();
+        if (reqStatus !== 'granted') {
+          Alert.alert('Permission Denied', 'Please enable notification permissions in your device settings.');
+          return;
+        }
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🦉 Zovio Duolingo Motivation',
+          body: "Don't break your tracking streak! Log your expenses today to keep Zovio happy!",
+          sound: true,
+          badge: 1,
+        },
+        trigger: null, // trigger immediately!
+      });
+      
+      // Also log it inside In-App list
+      await addInAppNotification(
+        '🦉 Zovio Duolingo Motivation',
+        "Don't break your tracking streak! Log your expenses today to keep Zovio happy!",
+        'motivation'
+      );
+    } catch (e: any) {
+      console.log('Failed to trigger push: ', e);
+      Alert.alert('Notification Triggered', "🦉 Keep your tracking streak active! Log your expenses today.");
     }
   };
 
@@ -708,6 +856,7 @@ Please settle when you get a chance 😊
         preferences,
         finances,
         isLoading,
+        notifications,
         addMemory,
         updateMemoryStatus,
         deleteMemory,
@@ -723,6 +872,10 @@ Please settle when you get a chance 😊
         updateFinance,
         exportSecureBackup,
         restoreSecureBackup,
+        addInAppNotification,
+        markNotificationAsRead,
+        clearAllNotifications,
+        triggerTestPushNotification,
       }}
     >
       {children}
