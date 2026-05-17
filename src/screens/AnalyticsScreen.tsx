@@ -25,6 +25,18 @@ const { width } = Dimensions.get('window');
 // Robust date string parser to support all platforms and raw local string formats
 const parseDateString = (dateStr: string): Date => {
   if (!dateStr) return new Date();
+
+  // Try split by '-' (e.g. YYYY-MM-DD) to prevent browser timezone offsets
+  const hyphenParts = dateStr.trim().split('-');
+  if (hyphenParts.length === 3) {
+    const year = parseInt(hyphenParts[0], 10);
+    const month = parseInt(hyphenParts[1], 10) - 1;
+    const day = parseInt(hyphenParts[2], 10);
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      return new Date(year, month, day);
+    }
+  }
+
   let d = new Date(dateStr);
   if (!isNaN(d.getTime())) return d;
 
@@ -61,20 +73,23 @@ export const AnalyticsScreen = () => {
   const getFilteredMemories = () => {
     return memories.filter((m) => {
       const recordDate = parseDateString(m.date);
+      const rTime = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate()).getTime();
+      
       if (isCustomRange) {
-        const rTime = recordDate.getTime();
-        const sTime = new Date(startDate).setHours(0, 0, 0, 0);
-        const eTime = new Date(endDate).setHours(23, 59, 59, 999);
+        const sTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+        const eTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
         return rTime >= sTime && rTime <= eTime;
       }
 
       const now = new Date();
-      const diffTime = Math.abs(now.getTime() - recordDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const diffDays = Math.round((todayTime - rTime) / (1000 * 60 * 60 * 24));
 
-      if (timeframe === 'Week') return diffDays <= 7;
-      if (timeframe === 'Month') return diffDays <= 30;
-      if (timeframe === 'Year') return diffDays <= 365;
+      if (diffDays < 0) return false; // Ignore future dates
+
+      if (timeframe === 'Week') return diffDays < 7;
+      if (timeframe === 'Month') return diffDays < 30;
+      if (timeframe === 'Year') return diffDays < 365;
       return true;
     });
   };
@@ -82,20 +97,23 @@ export const AnalyticsScreen = () => {
   const getFilteredFinances = () => {
     return finances.filter((f) => {
       const recordDate = parseDateString(f.date);
+      const rTime = new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate()).getTime();
+      
       if (isCustomRange) {
-        const rTime = recordDate.getTime();
-        const sTime = new Date(startDate).setHours(0, 0, 0, 0);
-        const eTime = new Date(endDate).setHours(23, 59, 59, 999);
+        const sTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+        const eTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
         return rTime >= sTime && rTime <= eTime;
       }
 
       const now = new Date();
-      const diffTime = Math.abs(now.getTime() - recordDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const diffDays = Math.round((todayTime - rTime) / (1000 * 60 * 60 * 24));
 
-      if (timeframe === 'Week') return diffDays <= 7;
-      if (timeframe === 'Month') return diffDays <= 30;
-      if (timeframe === 'Year') return diffDays <= 365;
+      if (diffDays < 0) return false; // Ignore future dates
+
+      if (timeframe === 'Week') return diffDays < 7;
+      if (timeframe === 'Month') return diffDays < 30;
+      if (timeframe === 'Year') return diffDays < 365;
       return true;
     });
   };
