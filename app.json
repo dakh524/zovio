@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "temp_init",
+    "name": "Zovio",
     "slug": "temp_init",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,12 +16,17 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.dakh.zovio",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +40,11 @@
           "contactsPermission": "Allow ZOVIO to access your contacts."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fcaeee8c-ee33-42b9-a713-79eecd7f3d65"
+      }
+    }
   }
 }
