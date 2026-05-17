@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import Svg, { Circle, Path, Rect, Line, Polygon, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Path, Rect, Line, Polygon, Text as SvgText, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 import { useZovio } from '../store/ZovioContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
@@ -240,10 +240,10 @@ export const AnalyticsScreen = () => {
   };
 
   // ==========================================
-  // FRIENDS & FAMILY SPECS & CALCULATIONS
+  // FRIENDS & FAMILY CALCULATIONS
   // ==========================================
   const categories = ['Food & Dining', 'Petrol', 'Transport', 'Shopping', 'Others'];
-  const categoryColors = ['#F5C518', '#34D399', '#EF4444', '#60A5FA', '#A78BFA'];
+  const categoryColors = ['#F5C518', '#34D399', '#EF4444', '#60A5FA', '#8B5CF6'];
 
   const categoryTotals = categories.reduce((acc, cat) => {
     acc[cat] = filtered
@@ -334,7 +334,7 @@ export const AnalyticsScreen = () => {
   const linePath = points.reduce((path, pt, i) => (i === 0 ? `M${pt.x},${pt.y}` : `${path} L${pt.x},${pt.y}`), '');
   const areaPath = points.length > 0 ? `${linePath} L${points[points.length - 1].x},${svgHeight - paddingY} L${points[0].x},${svgHeight - paddingY} Z` : '';
 
-  // Node highlight logic matching the circular pulsating selected node callout (30 node design in image)
+  // Highlight selected node (Concentric yellow glowing callout halo)
   const maxPointIdx = points.reduce((maxIdx, pt, idx, arr) => (pt.value > arr[maxIdx].value ? idx : maxIdx), 0);
   const selectedNode = points[maxPointIdx];
 
@@ -356,7 +356,7 @@ export const AnalyticsScreen = () => {
   const highestDebtorAmt = outstandingBalMap[highestDebtorName] || 0;
 
   // ==========================================
-  // PERSONAL FINANCE SPECS & CALCULATIONS
+  // PERSONAL FINANCE CALCULATIONS
   // ==========================================
   const getLast6Months = () => {
     const result = [];
@@ -380,7 +380,7 @@ export const AnalyticsScreen = () => {
   });
 
   const expenseCategories = ['Rent', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Other'];
-  const expenseColors = ['#F87171', '#F5C518', '#60A5FA', '#34D399', '#A78BFA', '#F472B6', '#9CA3AF'];
+  const expenseColors = ['#F87171', '#F5C518', '#60A5FA', '#34D399', '#8B5CF6', '#EC4899', '#9CA3AF'];
 
   const personalCategoryTotals = expenseCategories.reduce((acc, cat) => {
     acc[cat] = filteredFinances
@@ -421,15 +421,15 @@ export const AnalyticsScreen = () => {
 
   // Dynamic Efficiency Score
   const getEfficiencyScore = () => {
-    if (savingsRate > 35) return { badge: 'High Asset Build 🌟', desc: 'Fantastic cash utilization rate!', color: '#34D399' };
-    if (savingsRate > 15) return { badge: 'Balanced Growth 👍', desc: 'Secure reserves accumulated.', color: '#60A5FA' };
-    if (savingsRate >= 0) return { badge: 'Tight Position ⚠️', desc: 'Drains match total cash inflow.', color: '#F5C518' };
-    return { badge: 'Capital Deficit 🚨', desc: 'Cash outflows exceed monthly income.', color: '#F87171' };
+    if (savingsRate > 35) return { badge: 'High Asset Growth 🌟', desc: 'Outstanding asset build rate!', color: '#34D399' };
+    if (savingsRate > 15) return { badge: 'Steady Build 👍', desc: 'Secure cash reserves built.', color: '#60A5FA' };
+    if (savingsRate >= 0) return { badge: 'Tight Position ⚠️', desc: 'Outflows almost match total earnings.', color: '#F5C518' };
+    return { badge: 'Cash Deficit 🚨', desc: 'Expenses are outpacing total income.', color: '#F87171' };
   };
   const healthScore = getEfficiencyScore();
 
   // ==========================================
-  // NEW HIGH-TECH INTERACTIVE JAPANESE CANDLESTICK BUILDER
+  // JAPANESE CANDLESTICK BUILDER
   // ==========================================
   const candlestickData = last6Months.map((m) => {
     const monthFinances = filteredFinances.filter((f) => f.date.startsWith(m.key));
@@ -445,7 +445,7 @@ export const AnalyticsScreen = () => {
   const maxCandleVal = Math.max(...candlestickData.map(c => c.high), 5000);
 
   // ==========================================
-  // HIGH-TECH RADAR SPIDER GRAPH MILESTONE
+  // PENTAGON RADAR SPIDER GRID
   // ==========================================
   const radarRadius = 45;
   const radarCenter = 75;
@@ -462,7 +462,6 @@ export const AnalyticsScreen = () => {
 
   const radarPolygonPath = radarPoints.map(p => `${p.x},${p.y}`).join(' ');
 
-  // Pentagon Grid Mesh helper
   const drawPentagonGrid = (scale: number) => {
     return categories.map((_, i) => {
       const angle = i * (2 * Math.PI / 5) - Math.PI / 2;
@@ -472,14 +471,48 @@ export const AnalyticsScreen = () => {
     }).join(' ');
   };
 
-  // Speedometer circular gauge milestone
+  // Speedometer Gauge specs
   const targetGoal = 25000;
   const goalProgress = Math.min(100, Math.max(0, Math.round((totalPersonalSavings / targetGoal) * 100)));
 
-  // Cyber Panel Card wrapping element to display corners perfectly
+  // ==========================================
+  // 📲 NEW CHART TYPES INTEGRATION
+  // ==========================================
+
+  // 1. COMBINED BAR & LINE CASH FLOW CHART ("柱折图")
+  // Vertical bars show Income, smooth line shows Expenses over the last 6 months.
+  const combinedMax = Math.max(...monthlyBarData.map(d => Math.max(d.income, d.expense)), 3000);
+  const combinedLinePoints = monthlyBarData.map((d, idx) => {
+    const stepX = (svgWidth - 40) / 5;
+    const x = 20 + idx * stepX + 10;
+    const y = svgHeight - paddingY - (d.expense / combinedMax) * (svgHeight - 2 * paddingY);
+    return { x, y };
+  });
+  const combinedLinePath = combinedLinePoints.reduce((path, pt, i) => (i === 0 ? `M${pt.x},${pt.y}` : `${path} L${pt.x},${pt.y}`), '');
+
+  // 2. DOUBLE STACKED BAR CHART ("堆叠柱状图")
+  // Compares Friends Lending Diaries: Spent (Lent) vs Settled over timeframe periods.
+  const stackedMax = Math.max(gaveSum, receivedSum, 2000);
+  const lentHeight = (gaveSum / stackedMax) * 100;
+  const settledHeight = (receivedSum / stackedMax) * 100;
+
+  // 3. TRANSACTION SCATTER BUBBLE CHART ("散点图")
+  // Maps transaction sizes as glowing floating bubbles over days of the month.
+  const scatterTransactions = filteredFinances.length > 0 
+    ? filteredFinances.slice(0, 10) 
+    : [
+        { date: '2026-05-02', amount: 800, title: 'Rent partial' },
+        { date: '2026-05-10', amount: 1500, title: 'Dining' },
+        { date: '2026-05-15', amount: 2200, title: 'Freelance' },
+        { date: '2026-05-20', amount: 450, title: 'Bills' },
+        { date: '2026-05-25', amount: 1200, title: 'Shopping' }
+      ];
+  const maxScatterAmount = Math.max(...scatterTransactions.map(t => t.amount), 1000);
+
+  // Custom Light Yellow and Warm White Panel Card Frame
   const CyberPanel = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <View style={styles.cyberCard}>
-      {/* Absolute Corner Anchors */}
+      {/* Absolute Corner Anchors (Yellow themed) */}
       <View style={[styles.corner, styles.cornerTL]} />
       <View style={[styles.corner, styles.cornerTR]} />
       <View style={[styles.corner, styles.cornerBL]} />
@@ -494,24 +527,24 @@ export const AnalyticsScreen = () => {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Audit & Insights</Text>
+        <Text style={styles.title}>Audit Desk</Text>
         <TouchableOpacity style={styles.calendarBtn} onPress={() => setRangeModalVisible(true)}>
           <Icon
             name="calendar-outline"
             size={20}
-            color={isCustomRange ? COLORS.primary : '#FFFFFF'}
+            color={COLORS.primary}
           />
         </TouchableOpacity>
       </View>
 
-      {/* Date Range Badge indicator */}
+      {/* Date Range Indicator */}
       {isCustomRange && (
         <View style={styles.customRangeIndicator}>
           <Text style={styles.customRangeText}>
             📅 {startDate.toLocaleDateString()} — {endDate.toLocaleDateString()}
           </Text>
           <TouchableOpacity onPress={() => setIsCustomRange(false)}>
-            <Icon name="close-circle" size={18} color="#F87171" />
+            <Icon name="close-circle" size={18} color="#EF4444" />
           </TouchableOpacity>
         </View>
       )}
@@ -523,7 +556,7 @@ export const AnalyticsScreen = () => {
           onPress={() => setTrack('friends')}
         >
           <Text style={[styles.trackBtnText, track === 'friends' && styles.trackBtnTextActive]}>
-            Family Lending Ledger
+            Lending Diaries
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -531,7 +564,7 @@ export const AnalyticsScreen = () => {
           onPress={() => setTrack('personal')}
         >
           <Text style={[styles.trackBtnText, track === 'personal' && styles.trackBtnTextActive]}>
-            Personal Finance Desk
+            Personal Ledger
           </Text>
         </TouchableOpacity>
       </View>
@@ -566,30 +599,30 @@ export const AnalyticsScreen = () => {
                 <View style={{ flex: 1 }}>
                   <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
                     <Defs>
-                      <LinearGradient id="glowingArea" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0%" stopColor="#A78BFA" stopOpacity="0.4" />
-                        <Stop offset="100%" stopColor="#A78BFA" stopOpacity="0.0" />
+                      <LinearGradient id="yellowArea" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor="#F5C518" stopOpacity="0.4" />
+                        <Stop offset="100%" stopColor="#F5C518" stopOpacity="0.0" />
                       </LinearGradient>
                     </Defs>
                     {/* Grid Background Lines */}
-                    <Path d={`M0,20 L${svgWidth},20`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
-                    <Path d={`M0,65 L${svgWidth},65`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
-                    <Path d={`M0,110 L${svgWidth},110`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
-                    <Path d={`M0,130 L${svgWidth},130`} stroke="#1F1F35" strokeWidth="1" />
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,65 L${svgWidth},65`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,110 L${svgWidth},110`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#E5E7EB" strokeWidth="1" />
 
-                    {/* Area path with glowing gradient */}
-                    {areaPath !== '' && <Path d={areaPath} fill="url(#glowingArea)" />}
+                    {/* Shaded Area fill */}
+                    {areaPath !== '' && <Path d={areaPath} fill="url(#yellowArea)" />}
 
-                    {/* Smooth Neon line */}
-                    {linePath !== '' && <Path d={linePath} fill="none" stroke="#A78BFA" strokeWidth="2.5" />}
+                    {/* Smooth Yellow Line */}
+                    {linePath !== '' && <Path d={linePath} fill="none" stroke="#F5C518" strokeWidth="2.5" />}
 
-                    {/* Node Selector Highlight Halo Rings (Exactly like the "glowing 30 node" in reference) */}
+                    {/* Selected Node Highlight concentric rings */}
                     {selectedNode && (
                       <>
-                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="10" fill="rgba(167, 139, 250, 0.25)" />
-                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="6" fill="rgba(167, 139, 250, 0.5)" />
-                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="3" fill="#FFFFFF" />
-                        {/* Callout floating box */}
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="9" fill="rgba(245, 197, 24, 0.25)" />
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="5" fill="rgba(245, 197, 24, 0.5)" />
+                        <Circle cx={selectedNode.x} cy={selectedNode.y} r="2.5" fill="#FFFFFF" stroke="#F5C518" strokeWidth="1.5" />
+                        {/* Selected value float badge */}
                         <Rect
                           x={selectedNode.x - 22}
                           y={selectedNode.y - 28}
@@ -597,13 +630,13 @@ export const AnalyticsScreen = () => {
                           height="18"
                           rx="4"
                           fill="#1A1A2E"
-                          stroke="#A78BFA"
+                          stroke="#F5C518"
                           strokeWidth="1"
                         />
                         <SvgText
                           x={selectedNode.x}
                           y={selectedNode.y - 15}
-                          fill="#A78BFA"
+                          fill="#F5C518"
                           fontSize="9"
                           fontWeight="bold"
                           textAnchor="middle"
@@ -624,44 +657,85 @@ export const AnalyticsScreen = () => {
             </View>
           </CyberPanel>
 
-          {/* 2. HIGH-TECH RADAR SPIDER CHART (雷达图) */}
-          <CyberPanel title="雷达图 — Categories Analysis">
+          {/* 2. DOUBLE STACKED BAR CHART ("堆叠柱状图") */}
+          <CyberPanel title="堆叠柱状图 — Flow Comparison">
+            <View style={styles.stackedLayout}>
+              <View style={styles.stackedBarContainer}>
+                {/* Left Stacked Column (Lent/Gave) */}
+                <View style={styles.stackedColumn}>
+                  <View style={styles.stackedBarFrame}>
+                    <View style={[styles.stackedPart, { height: `${lentHeight}%`, backgroundColor: '#F5C518' }]} />
+                    <View style={[styles.stackedEmpty, { height: `${100 - lentHeight}%` }]} />
+                  </View>
+                  <Text style={styles.stackedLabel}>Total Lent</Text>
+                  <Text style={styles.stackedVal}>{preferences.currency}{gaveSum.toLocaleString()}</Text>
+                </View>
+
+                {/* Right Stacked Column (Settled/Received) */}
+                <View style={styles.stackedColumn}>
+                  <View style={styles.stackedBarFrame}>
+                    <View style={[styles.stackedPart, { height: `${settledHeight}%`, backgroundColor: '#1A1A2E' }]} />
+                    <View style={[styles.stackedEmpty, { height: `${100 - settledHeight}%` }]} />
+                  </View>
+                  <Text style={styles.stackedLabel}>Settled</Text>
+                  <Text style={styles.stackedVal}>{preferences.currency}{receivedSum.toLocaleString()}</Text>
+                </View>
+              </View>
+
+              <View style={styles.stackedInfo}>
+                <Text style={styles.stackedInfoTitle}>Lending Volume Analysis</Text>
+                <Text style={styles.stackedInfoDesc}>
+                  Your outstanding active loans stand at <Text style={{ color: '#F5C518', fontWeight: 'bold' }}>{preferences.currency}{(gaveSum - receivedSum).toLocaleString()}</Text>.
+                </Text>
+                <View style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, { backgroundColor: '#F5C518' }]} />
+                  <Text style={styles.bulletText}>Gave Out (Yellow)</Text>
+                </View>
+                <View style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, { backgroundColor: '#1A1A2E' }]} />
+                  <Text style={styles.bulletText}>Settled / Inflow (Navy)</Text>
+                </View>
+              </View>
+            </View>
+          </CyberPanel>
+
+          {/* 3. PENTAGON RADAR SPIDER CHART (雷达图) */}
+          <CyberPanel title="雷达图 — Lending Categories">
             <View style={styles.radarLayout}>
               <View style={styles.radarGraphic}>
                 <Svg width={150} height={150} viewBox="0 0 150 150">
-                  {/* Outer & Inner Pentagonal Grid Lines */}
-                  <Polygon points={drawPentagonGrid(1.0)} fill="none" stroke="#1F1F35" strokeWidth="1" />
-                  <Polygon points={drawPentagonGrid(0.7)} fill="none" stroke="#1F1F35" strokeWidth="0.8" />
-                  <Polygon points={drawPentagonGrid(0.4)} fill="none" stroke="#1F1F35" strokeWidth="0.5" />
+                  {/* Concentric grid webs */}
+                  <Polygon points={drawPentagonGrid(1.0)} fill="none" stroke="#E5E7EB" strokeWidth="1" />
+                  <Polygon points={drawPentagonGrid(0.7)} fill="none" stroke="#E5E7EB" strokeWidth="0.8" />
+                  <Polygon points={drawPentagonGrid(0.4)} fill="none" stroke="#E5E7EB" strokeWidth="0.5" />
 
-                  {/* Pentagonal Axes Web lines */}
+                  {/* Web spider lines */}
                   {categories.map((_, i) => {
                     const angle = i * (2 * Math.PI / 5) - Math.PI / 2;
                     const x = radarCenter + radarRadius * Math.cos(angle);
                     const y = radarCenter + radarRadius * Math.sin(angle);
                     return (
-                      <Line key={i} x1={radarCenter} y1={radarCenter} x2={x} y2={y} stroke="#1F1F35" strokeWidth="1" />
+                      <Line key={i} x1={radarCenter} y1={radarCenter} x2={x} y2={y} stroke="#E5E7EB" strokeWidth="1" />
                     );
                   })}
 
-                  {/* Filled Semi-transparent Web Polygon */}
+                  {/* Shaded radar area */}
                   {radarPolygonPath !== '' && (
                     <Polygon
                       points={radarPolygonPath}
-                      fill="rgba(167, 139, 250, 0.2)"
-                      stroke="#A78BFA"
-                      strokeWidth="1.5"
+                      fill="rgba(245, 197, 24, 0.2)"
+                      stroke="#F5C518"
+                      strokeWidth="2"
                     />
                   )}
 
-                  {/* Node circular dots */}
+                  {/* radar nodes */}
                   {radarPoints.map((pt, i) => (
-                    <Circle key={i} cx={pt.x} cy={pt.y} r="2.5" fill="#FFFFFF" stroke="#A78BFA" strokeWidth="1" />
+                    <Circle key={i} cx={pt.x} cy={pt.y} r="3" fill="#FFFFFF" stroke="#F5C518" strokeWidth="1.5" />
                   ))}
                 </Svg>
               </View>
 
-              {/* Labels list */}
               <View style={styles.radarLegend}>
                 {categories.map((cat, i) => (
                   <View key={i} style={styles.radarLegendRow}>
@@ -680,7 +754,7 @@ export const AnalyticsScreen = () => {
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
                   {totalSpent === 0 ? (
-                    <Circle cx="60" cy="60" r="45" stroke="#1F1F35" strokeWidth="14" fill="transparent" />
+                    <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="14" fill="transparent" />
                   ) : (
                     donutSlices.map((slice, i) => (
                       <Circle
@@ -702,7 +776,7 @@ export const AnalyticsScreen = () => {
                   <Text style={styles.donutAmount}>
                     {preferences.currency}{totalSpent.toLocaleString()}
                   </Text>
-                  <Text style={styles.donutLabel}>Total spent</Text>
+                  <Text style={styles.donutLabel}>Total lent</Text>
                 </View>
               </View>
 
@@ -722,43 +796,144 @@ export const AnalyticsScreen = () => {
               </View>
             </View>
           </CyberPanel>
-
-          {/* Quick Insights deck */}
-          <Text style={styles.deckTitle}>Audit Intelligence Cards</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.insightsRow}>
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(245, 197, 24, 0.1)' }]}>
-                <Icon name="star" size={18} color="#F5C518" />
-              </View>
-              <Text style={styles.insightValue}>
-                {preferences.currency}{savedThisMonth.toLocaleString()}
-              </Text>
-              <Text style={styles.insightLabel}>Lending Balance</Text>
-            </View>
-
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(167, 139, 250, 0.1)' }]}>
-                <Icon name="wallet" size={18} color="#A78BFA" />
-              </View>
-              <Text style={styles.insightValue}>
-                {preferences.currency}{avgLendingSize.toLocaleString()}
-              </Text>
-              <Text style={styles.insightLabel}>Avg Lending Size</Text>
-            </View>
-
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(96, 165, 250, 0.1)' }]}>
-                <Icon name="person" size={18} color="#60A5FA" />
-              </View>
-              <Text style={styles.insightValue} numberOfLines={1}>{highestDebtorName}</Text>
-              <Text style={styles.insightLabel}>Top Debtor ({preferences.currency}{highestDebtorAmt})</Text>
-            </View>
-          </ScrollView>
         </>
       ) : (
         <>
           {/* PERSONAL FINANCE TRACK */}
-          {/* 1. JAPANESE CANDLESTICK CHART */}
+          {/* 1. COMBINED BAR & LINE CASH FLOW CHART ("柱折图") */}
+          <CyberPanel title="柱折图 — Cash Flow Combined Grid">
+            <View style={styles.chartWrapper}>
+              <View style={styles.chartWithYAxis}>
+                <View style={styles.yAxisLabels}>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(combinedMax)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(combinedMax * 0.5)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}0</Text>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+                    {/* Background grid */}
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,75 L${svgWidth},75`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#E5E7EB" strokeWidth="1" />
+
+                    {/* Bars representing Income */}
+                    {monthlyBarData.map((d, idx) => {
+                      const stepX = (svgWidth - 40) / 5;
+                      const baseX = 20 + idx * stepX;
+                      const barW = 10;
+                      const barH = (d.income / combinedMax) * 110;
+
+                      return (
+                        <Rect
+                          key={idx}
+                          x={baseX}
+                          y={130 - barH}
+                          width={barW}
+                          height={Math.max(2, barH)}
+                          fill="#FDE047"
+                          rx="2"
+                        />
+                      );
+                    })}
+
+                    {/* Expenses line chart running over the bars */}
+                    {combinedLinePath !== '' && (
+                      <Path d={combinedLinePath} fill="none" stroke="#1A1A2E" strokeWidth="2.5" />
+                    )}
+
+                    {/* Expenses line node points */}
+                    {combinedLinePoints.map((pt, idx) => (
+                      <Circle key={idx} cx={pt.x} cy={pt.y} r="3.5" fill="#FFFFFF" stroke="#1A1A2E" strokeWidth="2" />
+                    ))}
+                  </Svg>
+                </View>
+              </View>
+
+              <View style={styles.chartXAxis}>
+                {monthlyBarData.map((c) => (
+                  <Text key={c.label} style={styles.xAxisText}>{c.label}</Text>
+                ))}
+              </View>
+
+              {/* Combined Legend */}
+              <View style={styles.combinedLegend}>
+                <View style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, { backgroundColor: '#FDE047' }]} />
+                  <Text style={styles.bulletText}>Income Inflow (Yellow bars)</Text>
+                </View>
+                <View style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, { backgroundColor: '#1A1A2E' }]} />
+                  <Text style={styles.bulletText}>Expense Outflow (Navy line)</Text>
+                </View>
+              </View>
+            </View>
+          </CyberPanel>
+
+          {/* 2. TRANSACTION SCATTER BUBBLE CHART ("散点图") */}
+          <CyberPanel title="散点图 — Transaction Bubbles Desk">
+            <View style={styles.chartWrapper}>
+              <View style={styles.chartWithYAxis}>
+                <View style={styles.yAxisLabels}>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxScatterAmount)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}{Math.round(maxScatterAmount * 0.5)}</Text>
+                  <Text style={styles.yAxisText}>{preferences.currency}0</Text>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,75 L${svgWidth},75`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#E5E7EB" strokeWidth="1" />
+
+                    {scatterTransactions.map((tx, idx) => {
+                      const stepX = (svgWidth - 40) / Math.max(1, scatterTransactions.length - 1);
+                      const cx = 20 + idx * stepX;
+                      const cy = 130 - (tx.amount / maxScatterAmount) * 100;
+                      // Radius maps to transaction size relative to total amount
+                      const radius = Math.max(6, Math.min(18, (tx.amount / maxScatterAmount) * 20));
+
+                      return (
+                        <G key={idx}>
+                          <Circle
+                            cx={cx}
+                            cy={cy}
+                            r={radius}
+                            fill="rgba(245, 197, 24, 0.3)"
+                            stroke="#F5C518"
+                            strokeWidth="1.5"
+                          />
+                          <Circle
+                            cx={cx}
+                            cy={cy}
+                            r="3"
+                            fill="#1A1A2E"
+                          />
+                        </G>
+                      );
+                    })}
+                  </Svg>
+                </View>
+              </View>
+
+              <View style={styles.chartXAxis}>
+                {scatterTransactions.map((tx, idx) => {
+                  const dateObj = parseDateString(tx.date);
+                  return (
+                    <Text key={idx} style={[styles.xAxisText, { fontSize: 8 }]}>
+                      {dateObj.getDate()}th
+                    </Text>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.scatterDesc}>
+                💡 Bubble radius corresponds to transaction sizes. Larger bubbles indicate high-volume cash transactions.
+              </Text>
+            </View>
+          </CyberPanel>
+
+          {/* 3. JAPANESE CANDLESTICK CHART */}
           <CyberPanel title="日本蜡烛图 — Japanese Candlestick Trend">
             <View style={styles.chartWrapper}>
               <View style={styles.chartWithYAxis}>
@@ -770,9 +945,9 @@ export const AnalyticsScreen = () => {
 
                 <View style={{ flex: 1 }}>
                   <Svg width="100%" height={150} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-                    <Path d={`M0,20 L${svgWidth},20`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
-                    <Path d={`M0,75 L${svgWidth},75`} stroke="#1F1F35" strokeWidth="1" strokeDasharray="3,3" />
-                    <Path d={`M0,130 L${svgWidth},130`} stroke="#1F1F35" strokeWidth="1" />
+                    <Path d={`M0,20 L${svgWidth},20`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,75 L${svgWidth},75`} stroke="#F0F0F0" strokeWidth="1" strokeDasharray="3,3" />
+                    <Path d={`M0,130 L${svgWidth},130`} stroke="#E5E7EB" strokeWidth="1" />
 
                     {candlestickData.map((c, idx) => {
                       const stepX = (svgWidth - 20) / 6;
@@ -822,7 +997,7 @@ export const AnalyticsScreen = () => {
             </View>
           </CyberPanel>
 
-          {/* 2. SEGMENTED CIRCULAR GAUGE SPEEDOMETER (仪表盘) */}
+          {/* 4. SEGMENTED CIRCULAR GAUGE SPEEDOMETER (仪表盘) */}
           <CyberPanel title="仪表盘 — Savings Ring Speedometer">
             <View style={styles.gaugeContainer}>
               <View style={styles.gaugeGraphic}>
@@ -833,7 +1008,7 @@ export const AnalyticsScreen = () => {
                     cy="50"
                     r="42"
                     fill="transparent"
-                    stroke="#1F1F35"
+                    stroke="#E5E7EB"
                     strokeWidth="4"
                     strokeDasharray="2, 6"
                   />
@@ -843,7 +1018,7 @@ export const AnalyticsScreen = () => {
                     cy="50"
                     r="34"
                     fill="transparent"
-                    stroke="#1F1F35"
+                    stroke="#E5E7EB"
                     strokeWidth="8"
                   />
                   <Circle
@@ -851,7 +1026,7 @@ export const AnalyticsScreen = () => {
                     cy="50"
                     r="34"
                     fill="transparent"
-                    stroke="#A78BFA"
+                    stroke="#F5C518"
                     strokeWidth="8"
                     strokeDasharray={`${(goalProgress / 100) * 213.6} 213.6`}
                     rotation="-90"
@@ -861,7 +1036,7 @@ export const AnalyticsScreen = () => {
                 </Svg>
                 <View style={styles.gaugeCenter}>
                   <Text style={styles.gaugePercent}>{goalProgress}%</Text>
-                  <Text style={styles.gaugeLabel}>Efficiency</Text>
+                  <Text style={styles.gaugeLabel}>Savings Rate</Text>
                 </View>
               </View>
 
@@ -876,7 +1051,7 @@ export const AnalyticsScreen = () => {
             </View>
           </CyberPanel>
 
-          {/* 3. CATEGORY LEAKAGE WATERFALL PROGRESS PANEL (横向柱状图) */}
+          {/* 5. CATEGORY LEAKAGE WATERFALL PROGRESS PANEL (横向柱状图) */}
           <CyberPanel title="横向柱状图 — Category Leakage share">
             <View style={styles.waterfallWrapper}>
               <Text style={styles.waterfallTitle}>Percentage Leaked Share</Text>
@@ -892,7 +1067,7 @@ export const AnalyticsScreen = () => {
                   />
                 ))}
                 {totalPersonalSpent === 0 && (
-                  <View style={{ flex: 1, backgroundColor: '#1F1F35', height: 12 }} />
+                  <View style={{ flex: 1, backgroundColor: '#E5E7EB', height: 12 }} />
                 )}
               </View>
 
@@ -910,12 +1085,12 @@ export const AnalyticsScreen = () => {
           </CyberPanel>
 
           {/* Category Donut Distribution */}
-          <CyberPanel title="饼图 — Personal Outflows Share">
+          <CyberPanel title="饼图 — Outflow Category Breakdown">
             <View style={styles.donutOverview}>
               <View style={styles.donutContainer}>
                 <Svg width={110} height={110} viewBox="0 0 120 120">
                   {totalPersonalSpent === 0 ? (
-                    <Circle cx="60" cy="60" r="45" stroke="#1F1F35" strokeWidth="14" fill="transparent" />
+                    <Circle cx="60" cy="60" r="45" stroke="#E5E7EB" strokeWidth="14" fill="transparent" />
                   ) : (
                     personalDonutSlices.map((slice, i) => (
                       <Circle
@@ -960,55 +1135,61 @@ export const AnalyticsScreen = () => {
               </View>
             </View>
           </CyberPanel>
-
-          {/* Deep Cash flow metrics */}
-          <Text style={styles.deckTitle}>Audit Intelligence Cards</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.insightsRow}>
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                <Icon name="trending-down" size={18} color="#EF4444" />
-              </View>
-              <Text style={styles.insightValue}>
-                {preferences.currency}{dailySpendRate.toLocaleString()}
-              </Text>
-              <Text style={styles.insightLabel}>Daily Spend Rate</Text>
-            </View>
-
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(245, 197, 24, 0.1)' }]}>
-                <Icon name="cart-outline" size={18} color="#F5C518" />
-              </View>
-              <Text style={styles.insightValue}>
-                {preferences.currency}{largestTx ? largestTx.amount.toLocaleString() : 0}
-              </Text>
-              <Text style={styles.insightLabel} numberOfLines={1}>
-                Peak: {largestTx ? largestTx.title : 'N/A'}
-              </Text>
-            </View>
-
-            <View style={styles.cyberInsightCard}>
-              <View style={[styles.insightIcon, { backgroundColor: 'rgba(52, 211, 153, 0.1)' }]}>
-                <Icon name="stats-chart" size={18} color="#34D399" />
-              </View>
-              <Text style={styles.insightValue}>
-                {preferences.currency}{totalPersonalSavings.toLocaleString()}
-              </Text>
-              <Text style={styles.insightLabel}>Net Inflow</Text>
-            </View>
-          </ScrollView>
         </>
       )}
+
+      {/* Quick Cash Flow Intelligence Cards */}
+      <Text style={styles.deckTitle}>Audit Intelligence Cards</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.insightsRow}>
+        <View style={styles.cyberInsightCard}>
+          <View style={[styles.insightIcon, { backgroundColor: 'rgba(245, 197, 24, 0.1)' }]}>
+            <Icon name={track === 'friends' ? "star" : "trending-down"} size={18} color="#F5C518" />
+          </View>
+          <Text style={styles.insightValue}>
+            {preferences.currency}
+            {track === 'friends' ? savedThisMonth.toLocaleString() : dailySpendRate.toLocaleString()}
+          </Text>
+          <Text style={styles.insightLabel}>
+            {track === 'friends' ? 'Lending Balance' : 'Daily Spend Rate'}
+          </Text>
+        </View>
+
+        <View style={styles.cyberInsightCard}>
+          <View style={[styles.insightIcon, { backgroundColor: 'rgba(26, 26, 46, 0.05)' }]}>
+            <Icon name={track === 'friends' ? "wallet" : "cart-outline"} size={18} color="#1A1A2E" />
+          </View>
+          <Text style={styles.insightValue}>
+            {preferences.currency}
+            {track === 'friends' ? avgLendingSize.toLocaleString() : (largestTx ? largestTx.amount.toLocaleString() : 0)}
+          </Text>
+          <Text style={styles.insightLabel}>
+            {track === 'friends' ? 'Avg Lending Size' : `Peak: ${largestTx ? largestTx.title : 'N/A'}`}
+          </Text>
+        </View>
+
+        <View style={styles.cyberInsightCard}>
+          <View style={[styles.insightIcon, { backgroundColor: 'rgba(52, 211, 153, 0.1)' }]}>
+            <Icon name={track === 'friends' ? "person" : "stats-chart"} size={18} color="#34D399" />
+          </View>
+          <Text style={styles.insightValue} numberOfLines={1}>
+            {track === 'friends' ? highestDebtorName : `${preferences.currency}${totalPersonalSavings.toLocaleString()}`}
+          </Text>
+          <Text style={styles.insightLabel}>
+            {track === 'friends' ? `Top Debtor (${preferences.currency}${highestDebtorAmt})` : 'Net Inflow'}
+          </Text>
+        </View>
+      </ScrollView>
 
       {/* EXPORT OPTIONS SECTION */}
       <Text style={styles.deckTitle}>Audit Ledgers & Export Desk</Text>
       <View style={styles.exportContainer}>
         <TouchableOpacity style={styles.cyberExportBtnExcel} onPress={handleExportCSV}>
-          <Icon name="document-text-outline" size={18} color="#34D399" />
+          <Icon name="document-text-outline" size={18} color="#2E7D32" />
           <Text style={styles.cyberExportBtnTextExcel}>Export Excel (XLSX)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cyberExportBtnPDF} onPress={handleExportPDF}>
-          <Icon name="receipt-outline" size={18} color="#F87171" />
+          <Icon name="receipt-outline" size={18} color="#C62828" />
           <Text style={styles.cyberExportBtnTextPDF}>Export PDF Statement</Text>
         </TouchableOpacity>
       </View>
@@ -1020,7 +1201,7 @@ export const AnalyticsScreen = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Custom Date Range</Text>
               <TouchableOpacity onPress={() => setRangeModalVisible(false)}>
-                <Icon name="close" size={24} color="#FFFFFF" />
+                <Icon name="close" size={24} color="#1A1A2E" />
               </TouchableOpacity>
             </View>
 
@@ -1067,13 +1248,13 @@ export const AnalyticsScreen = () => {
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
-                style={[styles.rangeActionBtn, { backgroundColor: '#1A1A2E', flex: 1 }]}
+                style={[styles.rangeActionBtn, { backgroundColor: '#F3F4F6', flex: 1 }]}
                 onPress={() => {
                   setIsCustomRange(false);
                   setRangeModalVisible(false);
                 }}
               >
-                <Text style={[styles.rangeActionText, { color: '#8B949E' }]}>Reset</Text>
+                <Text style={[styles.rangeActionText, { color: '#5C6270' }]}>Reset</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1102,7 +1283,7 @@ export const AnalyticsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A16', // Deep neon black/navy base background matching the theme
+    backgroundColor: '#FFFDF4', // Beautiful warm sand white background matching ZOVIO core theme
     padding: 20,
     paddingTop: 50,
   },
@@ -1115,43 +1296,48 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
   },
   calendarBtn: {
-    backgroundColor: '#15152A',
+    backgroundColor: '#FFFFFF',
     width: 44,
     height: 44,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3B296A',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   customRangeIndicator: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#120F24',
-    borderWidth: 1,
-    borderColor: '#A78BFA',
+    backgroundColor: '#FEFCE8',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
     borderRadius: 12,
     padding: 12,
     marginBottom: 20,
   },
   customRangeText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#A78BFA',
+    fontWeight: '800',
+    color: '#B45309',
   },
   trackSelector: {
     flexDirection: 'row',
-    backgroundColor: '#121226',
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 4,
     marginBottom: 20,
     gap: 4,
-    borderWidth: 1,
-    borderColor: '#1C1C35',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
   },
   trackBtn: {
     flex: 1,
@@ -1160,29 +1346,29 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   trackBtnActive: {
-    backgroundColor: '#A78BFA', // High-tech active neon tab
+    backgroundColor: '#F5C518', // Primary yellow
   },
   trackBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#8B949E',
+    fontWeight: '700',
+    color: '#1A1A2E',
   },
   trackBtnTextActive: {
-    color: '#0A0A16',
+    color: '#1A1A2E',
     fontWeight: '800',
   },
   segmentControl: {
     flexDirection: 'row',
-    backgroundColor: '#121226',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 4,
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#1C1C35',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
   },
   segmentActive: {
     flex: 1,
-    backgroundColor: '#F5C518',
+    backgroundColor: '#1A1A2E',
     borderRadius: 16,
     paddingVertical: 8,
     alignItems: 'center',
@@ -1193,57 +1379,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentTextActive: {
-    color: '#0A0A16',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
   segmentText: {
-    color: '#8B949E',
-    fontWeight: '600',
+    color: '#1A1A2E',
+    fontWeight: '700',
   },
   cyberCard: {
-    backgroundColor: '#0E0E1F',
-    borderWidth: 1,
-    borderColor: '#1F1F3D',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
     borderRadius: 8,
     padding: 16,
     marginBottom: 24,
     position: 'relative',
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  // Bounding Corner Box Framing (Sci-Fi control interface matching reference image)
+  // Bounding Corner Box Framing (Sci-Fi control interface matching reference in Yellow Theme)
   corner: {
     position: 'absolute',
     width: 6,
     height: 6,
-    borderColor: '#A78BFA',
+    borderColor: '#F5C518',
   },
   cornerTL: {
-    top: -1,
-    left: -1,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
+    top: -1.5,
+    left: -1.5,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
   },
   cornerTR: {
-    top: -1,
-    right: -1,
-    borderTopWidth: 1.5,
-    borderRightWidth: 1.5,
+    top: -1.5,
+    right: -1.5,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
   },
   cornerBL: {
-    bottom: -1,
-    left: -1,
-    borderBottomWidth: 1.5,
-    borderLeftWidth: 1.5,
+    bottom: -1.5,
+    left: -1.5,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
   },
   cornerBR: {
-    bottom: -1,
-    right: -1,
-    borderBottomWidth: 1.5,
-    borderRightWidth: 1.5,
+    bottom: -1.5,
+    right: -1.5,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
   },
   panelTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: '#1A1A2E',
     marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1263,10 +1454,10 @@ const styles = StyleSheet.create({
   },
   yAxisText: {
     fontSize: 9,
-    color: '#8B949E',
+    color: '#5C6270',
     textAlign: 'right',
     paddingRight: 8,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   chartXAxis: {
     flexDirection: 'row',
@@ -1277,9 +1468,83 @@ const styles = StyleSheet.create({
   },
   xAxisText: {
     fontSize: 9,
-    color: '#8B949E',
-    fontWeight: '600',
+    color: '#5C6270',
+    fontWeight: '700',
   },
+  // Stacked Bar Layout
+  stackedLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  stackedBarContainer: {
+    flexDirection: 'row',
+    gap: 24,
+    paddingHorizontal: 8,
+  },
+  stackedColumn: {
+    alignItems: 'center',
+  },
+  stackedBarFrame: {
+    width: 28,
+    height: 100,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 6,
+    overflow: 'hidden',
+    flexDirection: 'column-reverse',
+  },
+  stackedPart: {
+    width: '100%',
+    borderRadius: 4,
+  },
+  stackedEmpty: {
+    width: '100%',
+  },
+  stackedLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#5C6270',
+    marginTop: 8,
+  },
+  stackedVal: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginTop: 2,
+  },
+  stackedInfo: {
+    flex: 1,
+    marginLeft: 20,
+    gap: 6,
+  },
+  stackedInfoTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1A1A2E',
+  },
+  stackedInfoDesc: {
+    fontSize: 9,
+    color: '#5C6270',
+    lineHeight: 13,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  bulletText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#5C6270',
+  },
+  // Radar Layout
   radarLayout: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1301,14 +1566,14 @@ const styles = StyleSheet.create({
   },
   radarLegendLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#8B949E',
+    fontWeight: '700',
+    color: '#5C6270',
     flex: 1,
   },
   radarLegendVal: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: '800',
+    color: '#1A1A2E',
   },
   donutOverview: {
     flexDirection: 'row',
@@ -1329,11 +1594,11 @@ const styles = StyleSheet.create({
   donutAmount: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
   },
   donutLabel: {
     fontSize: 8,
-    color: '#8B949E',
+    color: '#5C6270',
     marginTop: 2,
     textTransform: 'uppercase',
   },
@@ -1357,23 +1622,38 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#8B949E',
+    fontWeight: '700',
+    color: '#5C6270',
   },
   legendPercent: {
     fontSize: 9,
-    color: '#5C6270',
+    color: '#8E9AA8',
     marginTop: 1,
   },
   legendAmount: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: '800',
+    color: '#1A1A2E',
+  },
+  // Combined Legend & Scatter
+  combinedLegend: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 12,
+  },
+  scatterDesc: {
+    fontSize: 9,
+    color: '#5C6270',
+    fontWeight: '600',
+    lineHeight: 13,
+    marginTop: 12,
+    textAlign: 'center',
   },
   deckTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
     marginTop: 12,
     marginBottom: 16,
   },
@@ -1384,11 +1664,16 @@ const styles = StyleSheet.create({
   cyberInsightCard: {
     width: 130,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#1C1C35',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
     borderRadius: 12,
     marginRight: 12,
-    backgroundColor: '#0E0E1F',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   insightIcon: {
     width: 32,
@@ -1401,13 +1686,13 @@ const styles = StyleSheet.create({
   insightValue: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
     marginBottom: 4,
   },
   insightLabel: {
     fontSize: 10,
-    color: '#8B949E',
-    fontWeight: '500',
+    color: '#5C6270',
+    fontWeight: '600',
   },
   gaugeContainer: {
     flexDirection: 'row',
@@ -1428,11 +1713,11 @@ const styles = StyleSheet.create({
   gaugePercent: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
   },
   gaugeLabel: {
     fontSize: 8,
-    color: '#8B949E',
+    color: '#5C6270',
     marginTop: 2,
     textTransform: 'uppercase',
   },
@@ -1443,7 +1728,7 @@ const styles = StyleSheet.create({
   gaugeTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#8B949E',
+    color: '#5C6270',
   },
   gaugeStatus: {
     fontSize: 14,
@@ -1452,13 +1737,13 @@ const styles = StyleSheet.create({
   },
   gaugeDesc: {
     fontSize: 9,
-    color: '#5C6270',
+    color: '#8E9AA8',
     lineHeight: 12,
   },
   gaugeGoalSub: {
     fontSize: 9,
-    fontWeight: '700',
-    color: '#A78BFA',
+    fontWeight: '800',
+    color: '#B45309',
     marginTop: 8,
   },
   waterfallWrapper: {
@@ -1467,7 +1752,7 @@ const styles = StyleSheet.create({
   waterfallTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#8B949E',
+    color: '#5C6270',
     marginBottom: 10,
   },
   waterfallBar: {
@@ -1475,7 +1760,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 16,
-    backgroundColor: '#15152A',
+    backgroundColor: '#F3F4F6',
   },
   waterfallLegendRow: {
     flexDirection: 'row',
@@ -1488,8 +1773,8 @@ const styles = StyleSheet.create({
   },
   waterfallLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    color: '#8B949E',
+    fontWeight: '700',
+    color: '#5C6270',
   },
   exportContainer: {
     flexDirection: 'row',
@@ -1504,9 +1789,9 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: 'rgba(52, 211, 153, 0.05)',
-    borderColor: '#34D399',
+    borderWidth: 1.5,
+    backgroundColor: '#E8F5E9',
+    borderColor: '#81C784',
   },
   cyberExportBtnPDF: {
     flex: 1,
@@ -1516,33 +1801,33 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: 'rgba(248, 113, 113, 0.05)',
-    borderColor: '#F87171',
+    borderWidth: 1.5,
+    backgroundColor: '#FFEBEE',
+    borderColor: '#E57373',
   },
   cyberExportBtnTextExcel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#34D399',
+    color: '#2E7D32',
   },
   cyberExportBtnTextPDF: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#F87171',
+    color: '#C62828',
   },
   modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(10, 10, 22, 0.75)',
+    backgroundColor: 'rgba(11, 19, 43, 0.4)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#0E0E1F',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
     paddingBottom: 40,
-    borderWidth: 1,
-    borderColor: '#1F1F3D',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1553,11 +1838,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
   },
   modalSub: {
     fontSize: 11,
-    color: '#8B949E',
+    color: '#5C6270',
   },
   rangeRow: {
     flexDirection: 'row',
@@ -1566,21 +1851,21 @@ const styles = StyleSheet.create({
   },
   pickerTrigger: {
     flex: 1,
-    backgroundColor: '#15152A',
+    backgroundColor: '#FFFDF4',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#1F1F3D',
+    borderWidth: 1.5,
+    borderColor: '#F5C518',
   },
   pickerLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#8B949E',
+    color: '#5C6270',
   },
   pickerVal: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#1A1A2E',
     marginTop: 4,
   },
   rangeActionBtn: {
